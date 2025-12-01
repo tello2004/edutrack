@@ -1,0 +1,3 @@
+*.pem
+.vscode
+!.vscode/extensions.json
