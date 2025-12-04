@@ -1,0 +1,117 @@
+package http
+
+import (
+	"encoding/json"
+	"log"
+	"net/http"
+	"time"
+
+	"gorm.io/gorm"
+)
+
+// Server represents the HTTP server for the API.
+type Server struct {
+	server *http.Server
+	router *http.ServeMux
+
+	// Database connection.
+	DB *gorm.DB
+
+	// JWT secret key for authentication.
+	JWTSecret []byte
+}
+
+// NewServer creates a new HTTP server.
+func NewServer(addr string, db *gorm.DB, jwtSecret []byte) *Server {
+	s := &Server{
+		router:    http.NewServeMux(),
+		DB:        db,
+		JWTSecret: jwtSecret,
+	}
+
+	s.server = &http.Server{
+		Addr:         addr,
+		Handler:      s.router,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	s.registerRoutes()
+
+	return s
+}
+
+// Start starts the HTTP server.
+func (s *Server) Start() error {
+	log.Printf("Starting server on %s", s.server.Addr)
+	return s.server.ListenAndServe()
+}
+
+// Close shuts down the HTTP server.
+func (s *Server) Close() error {
+	return s.server.Close()
+}
+
+// registerRoutes registers all API routes.
+func (s *Server) registerRoutes() {
+	// Auth (public)
+	s.router.HandleFunc("POST /auth/login", s.handleLogin)
+
+	// Protected routes (require authentication)
+	protected := s.withAuth
+
+	// Accounts
+	s.router.HandleFunc("GET /accounts", protected(s.handleListAccounts))
+	s.router.HandleFunc("GET /accounts/{id}", protected(s.handleGetAccount))
+	s.router.HandleFunc("POST /accounts", protected(s.handleCreateAccount))
+	s.router.HandleFunc("PUT /accounts/{id}", protected(s.handleUpdateAccount))
+	s.router.HandleFunc("DELETE /accounts/{id}", protected(s.handleDeleteAccount))
+
+	// Students
+	s.router.HandleFunc("GET /students", protected(s.handleListStudents))
+	s.router.HandleFunc("GET /students/{id}", protected(s.handleGetStudent))
+	s.router.HandleFunc("POST /students", protected(s.handleCreateStudent))
+	s.router.HandleFunc("PUT /students/{id}", protected(s.handleUpdateStudent))
+	s.router.HandleFunc("DELETE /students/{id}", protected(s.handleDeleteStudent))
+
+	// Teachers
+	s.router.HandleFunc("GET /teachers", protected(s.handleListTeachers))
+	s.router.HandleFunc("GET /teachers/{id}", protected(s.handleGetTeacher))
+	s.router.HandleFunc("POST /teachers", protected(s.handleCreateTeacher))
+	s.router.HandleFunc("PUT /teachers/{id}", protected(s.handleUpdateTeacher))
+	s.router.HandleFunc("DELETE /teachers/{id}", protected(s.handleDeleteTeacher))
+
+	// Careers
+	s.router.HandleFunc("GET /careers", protected(s.handleListCareers))
+	s.router.HandleFunc("GET /careers/{id}", protected(s.handleGetCareer))
+	s.router.HandleFunc("POST /careers", protected(s.handleCreateCareer))
+	s.router.HandleFunc("PUT /careers/{id}", protected(s.handleUpdateCareer))
+	s.router.HandleFunc("DELETE /careers/{id}", protected(s.handleDeleteCareer))
+
+	// Subjects
+	s.router.HandleFunc("GET /subjects", protected(s.handleListSubjects))
+	s.router.HandleFunc("GET /subjects/{id}", protected(s.handleGetSubject))
+	s.router.HandleFunc("POST /subjects", protected(s.handleCreateSubject))
+	s.router.HandleFunc("PUT /subjects/{id}", protected(s.handleUpdateSubject))
+	s.router.HandleFunc("DELETE /subjects/{id}", protected(s.handleDeleteSubject))
+
+	// Attendances
+	s.router.HandleFunc("GET /attendances", protected(s.handleListAttendances))
+	s.router.HandleFunc("GET /attendances/{id}", protected(s.handleGetAttendance))
+	s.router.HandleFunc("POST /attendances", protected(s.handleCreateAttendance))
+	s.router.HandleFunc("PUT /attendances/{id}", protected(s.handleUpdateAttendance))
+	s.router.HandleFunc("DELETE /attendances/{id}", protected(s.handleDeleteAttendance))
+
+	// Grades
+	s.router.HandleFunc("GET /grades", protected(s.handleListGrades))
+	s.router.HandleFunc("GET /grades/{id}", protected(s.handleGetGrade))
+	s.router.HandleFunc("POST /grades", protected(s.handleCreateGrade))
+	s.router.HandleFunc("PUT /grades/{id}", protected(s.handleUpdateGrade))
+	s.router.HandleFunc("DELETE /grades/{id}", protected(s.handleDeleteGrade))
+}
+
+// decodeJSON decodes a JSON request body into the given destination.
+func decodeJSON(r *http.Request, dst any) error {
+	return json.NewDecoder(r.Body).Decode(dst)
+}
