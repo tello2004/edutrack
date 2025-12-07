@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -48,15 +49,21 @@ func (s *Server) Start() error {
 	return s.server.ListenAndServe()
 }
 
-// Close shuts down the HTTP server.
+// Close shuts down the HTTP server immediately.
 func (s *Server) Close() error {
 	return s.server.Close()
+}
+
+// Shutdown gracefully shuts down the HTTP server.
+func (s *Server) Shutdown(ctx context.Context) error {
+	return s.server.Shutdown(ctx)
 }
 
 // registerRoutes registers all API routes.
 func (s *Server) registerRoutes() {
 	// Auth (public)
 	s.router.HandleFunc("POST /auth/login", s.handleLogin)
+	s.router.HandleFunc("POST /auth/license", s.handleLicenseLogin)
 
 	// Protected routes (require authentication)
 	protected := s.withAuth
