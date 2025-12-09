@@ -10,11 +10,19 @@ import (
 )
 
 func init() {
+	// Ensure app is initialized before setting db.
+	if app == nil {
+		app = &application{}
+	}
+
 	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		dsn = "edutrack.db"
+	}
 
 	db, err := sqlite.Open(dsn)
 	if err != nil {
-		log.Fatalf("edutrackd: %s", err)
+		log.Fatalf("edutrackd: failed to open database: %s", err)
 	}
 
 	app.db = db
