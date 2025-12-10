@@ -25,7 +25,11 @@ func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("email LIKE ?", "%"+email+"%")
 	}
 	if active := r.URL.Query().Get("active"); active != "" {
-		query = query.Where("active = ?", active == "true")
+		if active == "true" {
+			query = query.Where("active = ?", 1)
+		} else {
+			query = query.Where("active = ?", 0)
+		}
 	}
 
 	var accounts []edutrack.Account
