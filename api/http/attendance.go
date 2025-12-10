@@ -27,7 +27,7 @@ func (s *Server) handleListAttendances(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("subject_id = ?", subjectID)
 	}
 	if date := r.URL.Query().Get("date"); date != "" {
-		query = query.Where("date = ?", date)
+		query = query.Where("DATE(date) = ?", date)
 	}
 
 	if err := query.Find(&attendances).Error; err != nil {
