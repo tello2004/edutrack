@@ -10,11 +10,6 @@ import (
 )
 
 func init() {
-	// Ensure app is initialized before setting db.
-	if app == nil {
-		app = &application{}
-	}
-
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		dsn = "edutrack.db"
