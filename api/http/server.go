@@ -20,25 +20,61 @@ type Server struct {
 
 	// JWT secret key for authentication.
 	JWTSecret []byte
+
+	// CORS configuration.
+	CORSConfig *CORSConfig
 }
 
 // NewServer creates a new HTTP server.
 func NewServer(addr string, db *gorm.DB, jwtSecret []byte) *Server {
 	s := &Server{
-		router:    http.NewServeMux(),
-		DB:        db,
-		JWTSecret: jwtSecret,
+		router:     http.NewServeMux(),
+		DB:         db,
+		JWTSecret:  jwtSecret,
+		CORSConfig: DefaultCORSConfig(),
 	}
+
+	s.registerRoutes()
+
+	// Wrap the router with CORS middleware.
+	handler := withCORS(s.CORSConfig, s.router)
 
 	s.server = &http.Server{
 		Addr:         addr,
-		Handler:      s.router,
+		Handler:      handler,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
+	return s
+}
+
+// NewServerWithCORS creates a new HTTP server with custom CORS configuration.
+func NewServerWithCORS(addr string, db *gorm.DB, jwtSecret []byte, corsConfig *CORSConfig) *Server {
+	s := &Server{
+		router:     http.NewServeMux(),
+		DB:         db,
+		JWTSecret:  jwtSecret,
+		CORSConfig: corsConfig,
+	}
+
+	if s.CORSConfig == nil {
+		s.CORSConfig = DefaultCORSConfig()
+	}
+
 	s.registerRoutes()
+
+	// Wrap the router with CORS middleware.
+	handler := withCORS(s.CORSConfig, s.router)
+
+	s.server = &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 30 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 
 	return s
 }

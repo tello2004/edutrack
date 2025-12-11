@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,26 +9,7 @@ import (
 
 	edutrack "lahuerta.tecmm.edu.mx/edutrack"
 	"lahuerta.tecmm.edu.mx/edutrack/http"
-
-	"gorm.io/gorm"
 )
-
-var app *application
-
-type application struct {
-	db        *gorm.DB
-	logger    *log.Logger
-	errLogger *log.Logger
-	server    *http.Server
-	edutrack  *edutrack.App
-}
-
-func init() {
-	app = &application{
-		logger:    log.New(os.Stdout, "[edutrackd] ", log.LstdFlags),
-		errLogger: log.New(os.Stderr, "[edutrackd] ERROR: ", log.LstdFlags),
-	}
-}
 
 func main() {
 	// Ensure database is closed on exit.
