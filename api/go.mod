@@ -3,7 +3,7 @@ module lahuerta.tecmm.edu.mx/edutrack
 go 1.25.5
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.2.1
+	github.com/golang-jwt/jwt/v5 v5.2.2
 	golang.org/x/crypto v0.31.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
