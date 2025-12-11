@@ -1,0 +1,46 @@
+services:
+    api:
+        build:
+            context: ./api
+            dockerfile: Containerfile
+            target: development
+        container_name: edutrack-api
+        ports:
+            - "8080:8080"
+        environment:
+            - EDUTRACK_ADDR=:8080
+            - EDUTRACK_JWT_SECRET=${EDUTRACK_JWT_SECRET:-edutrack-dev-secret-change-in-production}
+        volumes:
+            - ./api:/app
+            - api-cache:/go/pkg/mod
+            - api-build-cache:/root/.cache/go-build
+        working_dir: /app
+        networks:
+            - edutrack-network
+        restart: unless-stopped
+
+    client:
+        build:
+            context: ./client
+            dockerfile: Containerfile
+        container_name: edutrack-client
+        ports:
+            - "5173:5173"
+        environment:
+            - VITE_API_URL=http://localhost:8080
+        volumes:
+            - ./client:/app
+            - /app/node_modules
+        depends_on:
+            - api
+        networks:
+            - edutrack-network
+        restart: unless-stopped
+
+networks:
+    edutrack-network:
+        driver: bridge
+
+volumes:
+    api-cache:
+    api-build-cache:
