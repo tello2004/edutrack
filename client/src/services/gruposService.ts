@@ -20,6 +20,6 @@ export async function updateGrupo(grupo: Grupo): Promise<Grupo> {
   return grupo;
 }
 
-/*export async function deleteGrupo(id: string): Promise<void> {
+export async function deleteGrupo(id: string): Promise<void> {
   return;
-}*/
+}
