@@ -11,6 +11,7 @@
 .DS_Store
 Thumbs.db
 api/tmp/
+api/edutrackd
 api/build-errors.log
 *.exe
 *.exe~
