@@ -7,8 +7,6 @@ reglas mencionadas en este archivo.
 
 - La aplicación está divida en dos partes: una API a través de HTTP escrita en
 Go y un cliente Web escrito en TypeScript, usando React.
-- Para la base de datos utilizamos `dbmate` para mantener las migraciones de la
-base de datos (en este caso PostgreSQL.)
 
 Para construir la aplicación completa (tanto backend como frontend), son
 necesarias las siguientes herramientas:
@@ -16,7 +14,6 @@ necesarias las siguientes herramientas:
 - [Node.js](https://nodejs.org) (al menos v22)
 - [Go](https://go.dev) (al menos v1.25)
 - [PostgreSQL](https://www.postgresql.org) (al menos v16)
-- [dbmate](https://github.com/amacneil/dbmate)
 - [Terraform](https://developer.hashicorp.com/terraform)
 - [Docker](https://www.docker.com) o [Podman](https://podman.io)
 
