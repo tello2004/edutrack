@@ -1,0 +1,47 @@
+FROM golang:1.25-alpine AS development
+
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+RUN go install github.com/air-verse/air@latest && \
+    mv /go/bin/air /usr/local/bin/air
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+
+RUN go mod download
+
+COPY . .
+
+EXPOSE 8080
+
+CMD ["air", "-c", ".air.toml"]
+
+FROM golang:1.25-alpine AS builder
+
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN CGO_ENABLED=1 go build -tags sqlite -ldflags="-s -w -linkmode external -extldflags '-static'" -o /app/edutrackd ./cmd/edutrackd
+
+FROM alpine:latest AS production
+
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+
+COPY --from=builder /app/edutrackd .
+
+RUN addgroup -S edutrack && adduser -S edutrack -G edutrack
+RUN chown -R edutrack:edutrack /app
+USER edutrack
+
+EXPOSE 8080
+
+CMD ["./edutrackd"]

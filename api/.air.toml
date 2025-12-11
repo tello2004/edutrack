@@ -1,0 +1,102 @@
+# Air - Live reload for Go apps
+# Configuración para EduTrack API
+
+root = "."
+testdata_dir = "testdata"
+tmp_dir = "tmp"
+
+[build]
+  # Comando de build con soporte SQLite
+  cmd = "go build -tags sqlite -o ./tmp/main ./cmd/edutrackd"
+
+  # Binario resultante
+  bin = "./tmp/main"
+
+  # Argumentos para el binario (vacío por defecto)
+  args_bin = []
+
+  # Tiempo de espera antes de hacer rebuild (milliseconds)
+  delay = 1000
+
+  # Extensiones de archivo a vigilar
+  include_ext = ["go", "tpl", "tmpl", "html"]
+
+  # Archivos a ignorar
+  exclude_file = []
+
+  # Directorios a ignorar
+  exclude_dir = ["assets", "tmp", "vendor", "testdata"]
+
+  # Usar regex para exclusiones
+  exclude_regex = ["_test.go"]
+
+  # No ignorar cambios en archivos sin cambio
+  exclude_unchanged = false
+
+  # Seguir enlaces simbólicos
+  follow_symlink = false
+
+  # Directorio raíz completo
+  full_bin = ""
+
+  # Incluir subdirectorios
+  include_dir = []
+
+  # Archivos específicos a incluir
+  include_file = []
+
+  # Matar el proceso con delay
+  kill_delay = "0s"
+
+  # Archivo de log
+  log = "build-errors.log"
+
+  # Polling en lugar de fsnotify (útil en contenedores)
+  poll = true
+
+  # Intervalo de polling (milliseconds)
+  poll_interval = 500
+
+  # Post-build commands
+  post_cmd = []
+
+  # Pre-build commands
+  pre_cmd = []
+
+  # Rerun on binary change
+  rerun = false
+
+  # Delay for rerun
+  rerun_delay = 500
+
+  # Enviar señal de interrupción antes de kill
+  send_interrupt = true
+
+  # Detener al salir
+  stop_on_error = false
+
+[color]
+  # Colores para la salida de consola
+  app = ""
+  build = "yellow"
+  main = "magenta"
+  runner = "green"
+  watcher = "cyan"
+
+[log]
+  # Mostrar hora en log
+  main_only = false
+
+  # Mostrar tiempo
+  time = false
+
+[misc]
+  # Limpiar consola en cada rebuild
+  clean_on_exit = false
+
+[screen]
+  # Limpiar pantalla en cada rebuild
+  clear_on_rebuild = true
+
+  # Mantener scroll
+  keep_scroll = true
