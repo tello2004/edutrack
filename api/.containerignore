@@ -1,0 +1,53 @@
+# Dependencies
+vendor/
+
+# Build outputs
+tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test files
+*_test.go
+testdata/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+LICENSE
+
+# Container files (avoid recursive builds)
+Containerfile
+Dockerfile
+docker-compose.yml
+.dockerignore
+.containerignore
+
+# Air temp files
+build-errors.log
+
+# Database files (should be mounted as volumes)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
