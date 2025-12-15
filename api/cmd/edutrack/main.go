@@ -7,7 +7,7 @@ import (
 	"text/tabwriter"
 
 	edutrack "lahuerta.tecmm.edu.mx/edutrack"
-	"lahuerta.tecmm.edu.mx/edutrack/database/sqlite"
+	"lahuerta.tecmm.edu.mx/edutrack/database/postgres"
 )
 
 const usage = `edutrack - EduTrack Administration CLI
@@ -71,10 +71,10 @@ func main() {
 	// Initialize database connection.
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		dsn = "edutrack.db"
+		dsn = "host=localhost user=edutrack password=edutrack dbname=edutrack port=5432 sslmode=disable"
 	}
 
-	db, err := sqlite.Open(dsn)
+	db, err := postgres.Open(dsn)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to connect to database: %v\n", err)
 		os.Exit(1)
