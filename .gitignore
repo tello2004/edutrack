@@ -13,6 +13,7 @@ Thumbs.db
 api/tmp/
 api/edutrackd
 api/edutrack
+api/seed
 api/build-errors.log
 *.exe
 *.exe~

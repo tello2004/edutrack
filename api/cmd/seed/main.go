@@ -1,57 +1,49 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	edutrack "lahuerta.tecmm.edu.mx/edutrack"
-	"lahuerta.tecmm.edu.mx/edutrack/database/sqlite"
 )
 
 func main() {
-	// Parse command line flags.
-	dbPath := flag.String("db", "edutrack.db", "Path to the SQLite database file")
-	flag.Parse()
+	// Ensure database is closed on exit.
+	defer func() {
+		if app.db != nil {
+			db, _ := app.db.DB()
+			_ = db.Close()
+		}
+	}()
 
-	logger := log.New(os.Stdout, "[seed] ", log.LstdFlags)
-	errLogger := log.New(os.Stderr, "[seed] ERROR: ", log.LstdFlags)
-
-	// Open the database.
-	logger.Printf("Opening database: %s", *dbPath)
-	db, err := sqlite.Open(*dbPath)
-	if err != nil {
-		errLogger.Fatalf("Failed to open database: %v", err)
+	// Wait for database initialization from build tags.
+	if app.db == nil {
+		app.errLogger.Fatal("No database configured. Build with -tags sqlite or -tags postgres.")
 	}
 
-	sqlDB, _ := db.DB()
-	defer sqlDB.Close()
-
 	// Initialize edutrack app and run migrations.
-	app := edutrack.New(db)
+	edutrackApp := edutrack.New(app.db)
 
-	logger.Println("Running migrations...")
-	if err := app.Migrate(); err != nil {
-		errLogger.Fatalf("Failed to run migrations: %v", err)
+	app.logger.Println("Running migrations...")
+	if err := edutrackApp.Migrate(); err != nil {
+		app.errLogger.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Create a tenant with a license.
-	logger.Println("Creating tenant...")
+	app.logger.Println("Creating tenant...")
 	tenant, err := edutrack.NewTenant("Instituto Tecnológico de La Huerta", edutrack.LicenseTypePro, 365*24*time.Hour)
 	if err != nil {
-		errLogger.Fatalf("Failed to create tenant: %v", err)
+		app.errLogger.Fatalf("Failed to create tenant: %v", err)
 	}
 
-	if err := db.Create(tenant).Error; err != nil {
-		errLogger.Fatalf("Failed to save tenant: %v", err)
+	if err := app.db.Create(tenant).Error; err != nil {
+		app.errLogger.Fatalf("Failed to save tenant: %v", err)
 	}
-	logger.Printf("Created tenant: %s (ID: %s)", tenant.Name, tenant.ID)
-	logger.Printf("License key: %s", tenant.GetLicenseKey())
+	app.logger.Printf("Created tenant: %s (ID: %s)", tenant.Name, tenant.ID)
+	app.logger.Printf("License key: %s", tenant.GetLicenseKey())
 
 	// Create careers.
-	logger.Println("Creating careers...")
+	app.logger.Println("Creating careers...")
 	careers := []edutrack.Career{
 		{
 			Name:        "Ingeniería en Sistemas Computacionales",
@@ -80,14 +72,14 @@ func main() {
 	}
 
 	for i := range careers {
-		if err := db.Create(&careers[i]).Error; err != nil {
-			errLogger.Fatalf("Failed to create career %s: %v", careers[i].Code, err)
+		if err := app.db.Create(&careers[i]).Error; err != nil {
+			app.errLogger.Fatalf("Failed to create career %s: %v", careers[i].Code, err)
 		}
-		logger.Printf("Created career: %s (%s)", careers[i].Name, careers[i].Code)
+		app.logger.Printf("Created career: %s (%s)", careers[i].Name, careers[i].Code)
 	}
 
 	// Create subjects.
-	logger.Println("Creating subjects...")
+	app.logger.Println("Creating subjects...")
 	subjects := []edutrack.Subject{
 		{Name: "Cálculo Diferencial", Code: "MAT101", Description: "Fundamentos de cálculo diferencial", Credits: 5, TenantID: tenant.ID},
 		{Name: "Cálculo Integral", Code: "MAT102", Description: "Fundamentos de cálculo integral", Credits: 5, TenantID: tenant.ID},
@@ -102,23 +94,23 @@ func main() {
 	}
 
 	for i := range subjects {
-		if err := db.Create(&subjects[i]).Error; err != nil {
-			errLogger.Fatalf("Failed to create subject %s: %v", subjects[i].Code, err)
+		if err := app.db.Create(&subjects[i]).Error; err != nil {
+			app.errLogger.Fatalf("Failed to create subject %s: %v", subjects[i].Code, err)
 		}
-		logger.Printf("Created subject: %s (%s)", subjects[i].Name, subjects[i].Code)
+		app.logger.Printf("Created subject: %s (%s)", subjects[i].Name, subjects[i].Code)
 	}
 
 	// Associate subjects with careers.
-	logger.Println("Associating subjects with careers...")
+	app.logger.Println("Associating subjects with careers...")
 	// ISC: MAT101, MAT102, PRG101, PRG102, BDD101, RED101, FIS101
-	db.Model(&careers[0]).Association("Subjects").Append(&subjects[0], &subjects[1], &subjects[2], &subjects[3], &subjects[4], &subjects[5], &subjects[8])
+	app.db.Model(&careers[0]).Association("Subjects").Append(&subjects[0], &subjects[1], &subjects[2], &subjects[3], &subjects[4], &subjects[5], &subjects[8])
 	// LAD: MAT101, CON101, ADM101
-	db.Model(&careers[1]).Association("Subjects").Append(&subjects[0], &subjects[6], &subjects[7])
+	app.db.Model(&careers[1]).Association("Subjects").Append(&subjects[0], &subjects[6], &subjects[7])
 	// IIN: MAT101, MAT102, FIS101, QUI101, ADM101
-	db.Model(&careers[2]).Association("Subjects").Append(&subjects[0], &subjects[1], &subjects[8], &subjects[9], &subjects[7])
+	app.db.Model(&careers[2]).Association("Subjects").Append(&subjects[0], &subjects[1], &subjects[8], &subjects[9], &subjects[7])
 
 	// Create accounts and teachers.
-	logger.Println("Creating accounts...")
+	app.logger.Println("Creating accounts...")
 
 	// Secretary account.
 	secretaryPassword, _ := edutrack.HashPassword("secretary123")
@@ -130,10 +122,10 @@ func main() {
 		Active:   true,
 		TenantID: tenant.ID,
 	}
-	if err := db.Create(&secretary).Error; err != nil {
-		errLogger.Fatalf("Failed to create secretary account: %v", err)
+	if err := app.db.Create(&secretary).Error; err != nil {
+		app.errLogger.Fatalf("Failed to create secretary account: %v", err)
 	}
-	logger.Printf("Created secretary: %s (%s)", secretary.Name, secretary.Email)
+	app.logger.Printf("Created secretary: %s (%s)", secretary.Name, secretary.Email)
 
 	// Teacher accounts.
 	teacherData := []struct {
@@ -158,50 +150,50 @@ func main() {
 			Active:   true,
 			TenantID: tenant.ID,
 		}
-		if err := db.Create(&account).Error; err != nil {
-			errLogger.Fatalf("Failed to create teacher account %s: %v", td.email, err)
+		if err := app.db.Create(&account).Error; err != nil {
+			app.errLogger.Fatalf("Failed to create teacher account %s: %v", td.email, err)
 		}
 
 		teacher := edutrack.Teacher{
 			TenantID:  tenant.ID,
 			AccountID: account.ID,
 		}
-		if err := db.Create(&teacher).Error; err != nil {
-			errLogger.Fatalf("Failed to create teacher %s: %v", td.name, err)
+		if err := app.db.Create(&teacher).Error; err != nil {
+			app.errLogger.Fatalf("Failed to create teacher %s: %v", td.name, err)
 		}
 		teachers = append(teachers, teacher)
-		logger.Printf("Created teacher: %s (%s)", td.name, td.email)
+		app.logger.Printf("Created teacher: %s (%s)", td.name, td.email)
 	}
 
 	// Assign subjects to teachers.
-	logger.Println("Assigning subjects to teachers...")
+	app.logger.Println("Assigning subjects to teachers...")
 	// Teacher 0 (Juan): MAT101, MAT102
-	db.Model(&teachers[0]).Association("Subjects").Append(&subjects[0], &subjects[1])
-	db.Model(&subjects[0]).Update("TeacherID", teachers[0].ID)
-	db.Model(&subjects[1]).Update("TeacherID", teachers[0].ID)
+	app.db.Model(&teachers[0]).Association("Subjects").Append(&subjects[0], &subjects[1])
+	app.db.Model(&subjects[0]).Update("TeacherID", teachers[0].ID)
+	app.db.Model(&subjects[1]).Update("TeacherID", teachers[0].ID)
 
 	// Teacher 1 (Ana): PRG101, PRG102
-	db.Model(&teachers[1]).Association("Subjects").Append(&subjects[2], &subjects[3])
-	db.Model(&subjects[2]).Update("TeacherID", teachers[1].ID)
-	db.Model(&subjects[3]).Update("TeacherID", teachers[1].ID)
+	app.db.Model(&teachers[1]).Association("Subjects").Append(&subjects[2], &subjects[3])
+	app.db.Model(&subjects[2]).Update("TeacherID", teachers[1].ID)
+	app.db.Model(&subjects[3]).Update("TeacherID", teachers[1].ID)
 
 	// Teacher 2 (Carlos): BDD101, RED101
-	db.Model(&teachers[2]).Association("Subjects").Append(&subjects[4], &subjects[5])
-	db.Model(&subjects[4]).Update("TeacherID", teachers[2].ID)
-	db.Model(&subjects[5]).Update("TeacherID", teachers[2].ID)
+	app.db.Model(&teachers[2]).Association("Subjects").Append(&subjects[4], &subjects[5])
+	app.db.Model(&subjects[4]).Update("TeacherID", teachers[2].ID)
+	app.db.Model(&subjects[5]).Update("TeacherID", teachers[2].ID)
 
 	// Teacher 3 (Patricia): CON101, ADM101
-	db.Model(&teachers[3]).Association("Subjects").Append(&subjects[6], &subjects[7])
-	db.Model(&subjects[6]).Update("TeacherID", teachers[3].ID)
-	db.Model(&subjects[7]).Update("TeacherID", teachers[3].ID)
+	app.db.Model(&teachers[3]).Association("Subjects").Append(&subjects[6], &subjects[7])
+	app.db.Model(&subjects[6]).Update("TeacherID", teachers[3].ID)
+	app.db.Model(&subjects[7]).Update("TeacherID", teachers[3].ID)
 
 	// Teacher 4 (Roberto): FIS101, QUI101
-	db.Model(&teachers[4]).Association("Subjects").Append(&subjects[8], &subjects[9])
-	db.Model(&subjects[8]).Update("TeacherID", teachers[4].ID)
-	db.Model(&subjects[9]).Update("TeacherID", teachers[4].ID)
+	app.db.Model(&teachers[4]).Association("Subjects").Append(&subjects[8], &subjects[9])
+	app.db.Model(&subjects[8]).Update("TeacherID", teachers[4].ID)
+	app.db.Model(&subjects[9]).Update("TeacherID", teachers[4].ID)
 
 	// Create students.
-	logger.Println("Creating students...")
+	app.logger.Println("Creating students...")
 	studentData := []struct {
 		studentID string
 		name      string
@@ -230,8 +222,8 @@ func main() {
 			Active:   true,
 			TenantID: tenant.ID,
 		}
-		if err := db.Create(&account).Error; err != nil {
-			errLogger.Fatalf("Failed to create student account %s: %v", sd.email, err)
+		if err := app.db.Create(&account).Error; err != nil {
+			app.errLogger.Fatalf("Failed to create student account %s: %v", sd.email, err)
 		}
 
 		student := edutrack.Student{
@@ -240,10 +232,10 @@ func main() {
 			AccountID: account.ID,
 			CareerID:  careers[sd.careerIdx].ID,
 		}
-		if err := db.Create(&student).Error; err != nil {
-			errLogger.Fatalf("Failed to create student %s: %v", sd.studentID, err)
+		if err := app.db.Create(&student).Error; err != nil {
+			app.errLogger.Fatalf("Failed to create student %s: %v", sd.studentID, err)
 		}
-		logger.Printf("Created student: %s (%s) - %s", sd.name, sd.studentID, careers[sd.careerIdx].Code)
+		app.logger.Printf("Created student: %s (%s) - %s", sd.name, sd.studentID, careers[sd.careerIdx].Code)
 	}
 
 	// Print summary.
