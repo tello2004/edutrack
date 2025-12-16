@@ -88,12 +88,13 @@ func createStudentTestCareer(t *testing.T, db *gorm.DB, tenantID string) *edutra
 }
 
 // createTestStudent creates a test student for a tenant.
-func createTestStudent(t *testing.T, db *gorm.DB, tenantID, studentID string, accountID, careerID uint) *edutrack.Student {
+func createTestStudent(t *testing.T, db *gorm.DB, tenantID, studentID string, accountID, careerID uint, semester int) *edutrack.Student {
 	student := &edutrack.Student{
 		StudentID: studentID,
 		AccountID: accountID,
 		CareerID:  careerID,
 		TenantID:  tenantID,
+		Semester:  semester,
 	}
 
 	if err := db.Create(student).Error; err != nil {
@@ -126,8 +127,8 @@ func TestHandleListStudents_Success(t *testing.T) {
 	studentAccount1 := createStudentTestAccount(t, db, tenant.ID, "student1@test.com", "Student 1", edutrack.RoleTeacher)
 	studentAccount2 := createStudentTestAccount(t, db, tenant.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 
-	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career.ID)
-	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career.ID)
+	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career.ID, 1)
+	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -166,8 +167,8 @@ func TestHandleListStudents_FilterByCareerID(t *testing.T) {
 	studentAccount1 := createStudentTestAccount(t, db, tenant.ID, "student1@test.com", "Student 1", edutrack.RoleTeacher)
 	studentAccount2 := createStudentTestAccount(t, db, tenant.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 
-	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career1.ID)
-	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career2.ID)
+	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career1.ID, 1)
+	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -190,6 +191,39 @@ func TestHandleListStudents_FilterByCareerID(t *testing.T) {
 	}
 }
 
+func TestHandleListStudents_FilterBySemester(t *testing.T) {
+	db := setupStudentTestDB(t)
+	tenant := createStudentTestTenant(t, db)
+	account := createStudentTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createStudentTestCareer(t, db, tenant.ID)
+
+	studentAccount1 := createStudentTestAccount(t, db, tenant.ID, "student1@test.com", "Student 1", edutrack.RoleTeacher)
+	studentAccount2 := createStudentTestAccount(t, db, tenant.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
+
+	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career.ID, 1)
+	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career.ID, 2)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeStudentAuthenticatedRequest(t, http.MethodGet, "/students?semester=2", nil, account)
+	w := httptest.NewRecorder()
+
+	server.handleListStudents(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("handleListStudents() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var students []edutrack.Student
+	if err := json.NewDecoder(w.Body).Decode(&students); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(students) != 1 {
+		t.Errorf("handleListStudents() with semester filter returned %d students, want 1", len(students))
+	}
+}
+
 func TestHandleListStudents_FilterByStudentID(t *testing.T) {
 	db := setupStudentTestDB(t)
 	tenant := createStudentTestTenant(t, db)
@@ -199,8 +233,8 @@ func TestHandleListStudents_FilterByStudentID(t *testing.T) {
 	studentAccount1 := createStudentTestAccount(t, db, tenant.ID, "student1@test.com", "Student 1", edutrack.RoleTeacher)
 	studentAccount2 := createStudentTestAccount(t, db, tenant.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 
-	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career.ID)
-	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career.ID)
+	createTestStudent(t, db, tenant.ID, "2024001", studentAccount1.ID, career.ID, 1)
+	createTestStudent(t, db, tenant.ID, "2024002", studentAccount2.ID, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -252,8 +286,8 @@ func TestHandleListStudents_TenantIsolation(t *testing.T) {
 	studentAccount1 := createStudentTestAccount(t, db, tenant1.ID, "student1@test.com", "Student 1", edutrack.RoleTeacher)
 	studentAccount2 := createStudentTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 
-	createTestStudent(t, db, tenant1.ID, "2024001", studentAccount1.ID, career1.ID)
-	createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID)
+	createTestStudent(t, db, tenant1.ID, "2024001", studentAccount1.ID, career1.ID, 1)
+	createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -276,7 +310,7 @@ func TestHandleGetStudent_Success(t *testing.T) {
 	account := createStudentTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	career := createStudentTestCareer(t, db, tenant.ID)
 	studentAccount := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Test Student", edutrack.RoleTeacher)
-	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career.ID)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -347,7 +381,7 @@ func TestHandleGetStudent_ForbiddenCrossTenant(t *testing.T) {
 	career2 := &edutrack.Career{Name: "Career 2", Code: "C2", TenantID: tenant2.ID, Active: true}
 	db.Create(career2)
 	studentAccount2 := createStudentTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
-	student2 := createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID)
+	student2 := createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -375,6 +409,7 @@ func TestHandleCreateStudent_Success(t *testing.T) {
 		StudentID: "2024001",
 		AccountID: studentAccount.ID,
 		CareerID:  career.ID,
+		Semester:  1,
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -398,6 +433,10 @@ func TestHandleCreateStudent_Success(t *testing.T) {
 
 	if created.TenantID != tenant.ID {
 		t.Errorf("handleCreateStudent() tenant_id = %q, want %q", created.TenantID, tenant.ID)
+	}
+
+	if created.Semester != 1 {
+		t.Errorf("handleCreateStudent() semester = %d, want %d", created.Semester, 1)
 	}
 }
 
@@ -455,13 +494,15 @@ func TestHandleUpdateStudent_Success(t *testing.T) {
 	account := createStudentTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	career := createStudentTestCareer(t, db, tenant.ID)
 	studentAccount := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Test Student", edutrack.RoleTeacher)
-	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career.ID)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
 	newStudentID := "2024999"
+	newSemester := 2
 	reqBody := UpdateStudentRequest{
 		StudentID: &newStudentID,
+		Semester:  &newSemester,
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -483,6 +524,10 @@ func TestHandleUpdateStudent_Success(t *testing.T) {
 	if updated.StudentID != "2024999" {
 		t.Errorf("handleUpdateStudent() student_id = %q, want %q", updated.StudentID, "2024999")
 	}
+
+	if updated.Semester != 2 {
+		t.Errorf("handleUpdateStudent() semester = %d, want %d", updated.Semester, 2)
+	}
 }
 
 func TestHandleUpdateStudent_UpdateCareer(t *testing.T) {
@@ -499,7 +544,7 @@ func TestHandleUpdateStudent_UpdateCareer(t *testing.T) {
 	db.Create(career2)
 
 	studentAccount := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Test Student", edutrack.RoleTeacher)
-	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career1.ID)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career1.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -560,7 +605,7 @@ func TestHandleUpdateStudent_ForbiddenCrossTenant(t *testing.T) {
 	career2 := &edutrack.Career{Name: "Career 2", Code: "C2", TenantID: tenant2.ID, Active: true}
 	db.Create(career2)
 	studentAccount2 := createStudentTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
-	student2 := createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID)
+	student2 := createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -585,7 +630,7 @@ func TestHandleDeleteStudent_Success(t *testing.T) {
 	account := createStudentTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	career := createStudentTestCareer(t, db, tenant.ID)
 	studentAccount := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Test Student", edutrack.RoleTeacher)
-	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career.ID)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAccount.ID, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -654,7 +699,7 @@ func TestHandleDeleteStudent_ForbiddenCrossTenant(t *testing.T) {
 	career2 := &edutrack.Career{Name: "Career 2", Code: "C2", TenantID: tenant2.ID, Active: true}
 	db.Create(career2)
 	studentAccount2 := createStudentTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
-	student2 := createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID)
+	student2 := createTestStudent(t, db, tenant2.ID, "2024002", studentAccount2.ID, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 

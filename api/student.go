@@ -9,6 +9,9 @@ type Student struct {
 	// Unique student ID or registration number within the institution.
 	StudentID string `gorm:"uniqueIndex:idx_student_tenant"`
 
+	// The current semester of the student.
+	Semester int `gorm:"not null;default:1"`
+
 	// Foreign keys.
 
 	// TenantID links the student to an institution.

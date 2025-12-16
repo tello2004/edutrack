@@ -199,17 +199,18 @@ func main() {
 		name      string
 		email     string
 		careerIdx int
+		semester  int
 	}{
-		{"2024ISC001", "Luis Fernando Torres Vega", "luis.torres@estudiante.tecmm.edu.mx", 0},
-		{"2024ISC002", "Andrea Sofía Mendoza Ruiz", "andrea.mendoza@estudiante.tecmm.edu.mx", 0},
-		{"2024ISC003", "Diego Alejandro Navarro Cruz", "diego.navarro@estudiante.tecmm.edu.mx", 0},
-		{"2024ISC004", "Valeria Campos Herrera", "valeria.campos@estudiante.tecmm.edu.mx", 0},
-		{"2024ISC005", "Miguel Ángel Ortiz Reyes", "miguel.ortiz@estudiante.tecmm.edu.mx", 0},
-		{"2024LAD001", "Gabriela Ríos Morales", "gabriela.rios@estudiante.tecmm.edu.mx", 1},
-		{"2024LAD002", "Fernando Castillo León", "fernando.castillo@estudiante.tecmm.edu.mx", 1},
-		{"2024LAD003", "Mariana Delgado Vargas", "mariana.delgado@estudiante.tecmm.edu.mx", 1},
-		{"2024IIN001", "Javier Eduardo Soto Jiménez", "javier.soto@estudiante.tecmm.edu.mx", 2},
-		{"2024IIN002", "Paulina Aguilar Domínguez", "paulina.aguilar@estudiante.tecmm.edu.mx", 2},
+		{"2024ISC001", "Luis Fernando Torres Vega", "luis.torres@estudiante.tecmm.edu.mx", 0, 1},
+		{"2024ISC002", "Andrea Sofía Mendoza Ruiz", "andrea.mendoza@estudiante.tecmm.edu.mx", 0, 1},
+		{"2024ISC003", "Diego Alejandro Navarro Cruz", "diego.navarro@estudiante.tecmm.edu.mx", 0, 2},
+		{"2024ISC004", "Valeria Campos Herrera", "valeria.campos@estudiante.tecmm.edu.mx", 0, 2},
+		{"2024ISC005", "Miguel Ángel Ortiz Reyes", "miguel.ortiz@estudiante.tecmm.edu.mx", 0, 3},
+		{"2024LAD001", "Gabriela Ríos Morales", "gabriela.rios@estudiante.tecmm.edu.mx", 1, 1},
+		{"2024LAD002", "Fernando Castillo León", "fernando.castillo@estudiante.tecmm.edu.mx", 1, 2},
+		{"2024LAD003", "Mariana Delgado Vargas", "mariana.delgado@estudiante.tecmm.edu.mx", 1, 3},
+		{"2024IIN001", "Javier Eduardo Soto Jiménez", "javier.soto@estudiante.tecmm.edu.mx", 2, 1},
+		{"2024IIN002", "Paulina Aguilar Domínguez", "paulina.aguilar@estudiante.tecmm.edu.mx", 2, 2},
 	}
 
 	for _, sd := range studentData {
@@ -231,6 +232,7 @@ func main() {
 			TenantID:  tenant.ID,
 			AccountID: account.ID,
 			CareerID:  careers[sd.careerIdx].ID,
+			Semester:  sd.semester,
 		}
 		if err := app.db.Create(&student).Error; err != nil {
 			app.errLogger.Fatalf("Failed to create student %s: %v", sd.studentID, err)

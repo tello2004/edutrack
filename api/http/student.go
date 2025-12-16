@@ -21,6 +21,9 @@ func (s *Server) handleListStudents(w http.ResponseWriter, r *http.Request) {
 	if careerID := r.URL.Query().Get("career_id"); careerID != "" {
 		query = query.Where("career_id = ?", careerID)
 	}
+	if semester := r.URL.Query().Get("semester"); semester != "" {
+		query = query.Where("semester = ?", semester)
+	}
 	if studentID := r.URL.Query().Get("student_id"); studentID != "" {
 		query = query.Where("student_id LIKE ?", "%"+studentID+"%")
 	}
@@ -70,6 +73,7 @@ type CreateStudentRequest struct {
 	StudentID string `json:"student_id"`
 	AccountID uint   `json:"account_id"`
 	CareerID  uint   `json:"career_id"`
+	Semester  int    `json:"semester"`
 }
 
 // handleCreateStudent handles POST /students.
@@ -91,10 +95,16 @@ func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Semester <= 0 {
+		sendErrorMessage(w, http.StatusBadRequest, "El semestre debe ser un número positivo.")
+		return
+	}
+
 	student := &edutrack.Student{
 		StudentID: req.StudentID,
 		AccountID: req.AccountID,
 		CareerID:  req.CareerID,
+		Semester:  req.Semester,
 		TenantID:  account.TenantID,
 	}
 
@@ -110,6 +120,7 @@ func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
 type UpdateStudentRequest struct {
 	StudentID *string `json:"student_id"`
 	CareerID  *uint   `json:"career_id"`
+	Semester  *int    `json:"semester"`
 }
 
 // handleUpdateStudent handles PUT /students/{id}.
@@ -148,6 +159,13 @@ func (s *Server) handleUpdateStudent(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.CareerID != nil {
 		student.CareerID = *req.CareerID
+	}
+	if req.Semester != nil {
+		if *req.Semester <= 0 {
+			sendErrorMessage(w, http.StatusBadRequest, "El semestre debe ser un número positivo.")
+			return
+		}
+		student.Semester = *req.Semester
 	}
 
 	if err := s.DB.Save(&student).Error; err != nil {
