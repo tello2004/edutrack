@@ -118,13 +118,14 @@ func createGradeTestTeacher(t *testing.T, db *gorm.DB, tenantID string, accountI
 }
 
 // createGradeTestSubject creates a test subject for a tenant.
-func createGradeTestSubject(t *testing.T, db *gorm.DB, tenantID string) *edutrack.Subject {
+func createGradeTestSubject(t *testing.T, db *gorm.DB, tenantID string, careerID uint) *edutrack.Subject {
 	subject := &edutrack.Subject{
 		Name:        "Matemáticas I",
 		Code:        fmt.Sprintf("MAT-%d", time.Now().UnixNano()),
 		Description: "Test subject",
 		Credits:     5,
 		TenantID:    tenantID,
+		CareerID:    careerID,
 	}
 
 	if err := db.Create(subject).Error; err != nil {
@@ -134,14 +135,28 @@ func createGradeTestSubject(t *testing.T, db *gorm.DB, tenantID string) *edutrac
 	return subject
 }
 
+// createGradeTestTopic creates a test topic for a subject.
+func createGradeTestTopic(t *testing.T, db *gorm.DB, tenantID string, subjectID uint) *edutrack.Topic {
+	topic := &edutrack.Topic{
+		Name:      "Test Topic",
+		SubjectID: subjectID,
+		TenantID:  tenantID,
+	}
+
+	if err := db.Create(topic).Error; err != nil {
+		t.Fatalf("Failed to create test topic: %v", err)
+	}
+
+	return topic
+}
+
 // createTestGrade creates a test grade record.
-func createTestGrade(t *testing.T, db *gorm.DB, tenantID string, studentID, subjectID, teacherID uint, value float64) *edutrack.Grade {
+func createTestGrade(t *testing.T, db *gorm.DB, tenantID string, studentID, topicID uint, value float64) *edutrack.Grade {
 	grade := &edutrack.Grade{
 		Value:     value,
 		Notes:     "Test grade",
 		StudentID: studentID,
-		SubjectID: subjectID,
-		TeacherID: teacherID,
+		TopicID:   topicID,
 		TenantID:  tenantID,
 	}
 
@@ -173,12 +188,11 @@ func TestHandleListGrades_Success(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 85.5)
-	createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 92.0)
+	createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 85.5)
+	createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 92.0)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -211,12 +225,11 @@ func TestHandleListGrades_FilterByStudentID(t *testing.T) {
 	studentAccount2 := createGradeTestAccount(t, db, tenant.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 	student1 := createGradeTestStudent(t, db, tenant.ID, studentAccount1.ID, career.ID)
 	student2 := createGradeTestStudent(t, db, tenant.ID, studentAccount2.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	createTestGrade(t, db, tenant.ID, student1.ID, subject.ID, teacher.ID, 85.5)
-	createTestGrade(t, db, tenant.ID, student2.ID, subject.ID, teacher.ID, 92.0)
+	createTestGrade(t, db, tenant.ID, student1.ID, topic.ID, 85.5)
+	createTestGrade(t, db, tenant.ID, student2.ID, topic.ID, 92.0)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -239,24 +252,23 @@ func TestHandleListGrades_FilterByStudentID(t *testing.T) {
 	}
 }
 
-func TestHandleListGrades_FilterBySubjectID(t *testing.T) {
+func TestHandleListGrades_FilterByTopicID(t *testing.T) {
 	db := setupGradeTestDB(t)
 	tenant := createGradeTestTenant(t, db)
 	account := createGradeTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject1 := createGradeTestSubject(t, db, tenant.ID)
-	subject2 := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic1 := createGradeTestTopic(t, db, tenant.ID, subject.ID)
+	topic2 := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	createTestGrade(t, db, tenant.ID, student.ID, subject1.ID, teacher.ID, 85.5)
-	createTestGrade(t, db, tenant.ID, student.ID, subject2.ID, teacher.ID, 92.0)
+	createTestGrade(t, db, tenant.ID, student.ID, topic1.ID, 85.5)
+	createTestGrade(t, db, tenant.ID, student.ID, topic2.ID, 92.0)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
-	req := makeGradeAuthenticatedRequest(t, http.MethodGet, fmt.Sprintf("/grades?subject_id=%d", subject1.ID), nil, account)
+	req := makeGradeAuthenticatedRequest(t, http.MethodGet, fmt.Sprintf("/grades?topic_id=%d", topic1.ID), nil, account)
 	w := httptest.NewRecorder()
 
 	server.handleListGrades(w, req)
@@ -271,44 +283,7 @@ func TestHandleListGrades_FilterBySubjectID(t *testing.T) {
 	}
 
 	if len(grades) != 1 {
-		t.Errorf("handleListGrades() with subject_id filter returned %d grades, want 1", len(grades))
-	}
-}
-
-func TestHandleListGrades_FilterByTeacherID(t *testing.T) {
-	db := setupGradeTestDB(t)
-	tenant := createGradeTestTenant(t, db)
-	account := createGradeTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
-	career := createGradeTestCareer(t, db, tenant.ID)
-	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
-	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount1 := createGradeTestAccount(t, db, tenant.ID, "teacher1@test.com", "Teacher 1", edutrack.RoleTeacher)
-	teacherAccount2 := createGradeTestAccount(t, db, tenant.ID, "teacher2@test.com", "Teacher 2", edutrack.RoleTeacher)
-	teacher1 := createGradeTestTeacher(t, db, tenant.ID, teacherAccount1.ID)
-	teacher2 := createGradeTestTeacher(t, db, tenant.ID, teacherAccount2.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
-
-	createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher1.ID, 85.5)
-	createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher2.ID, 92.0)
-
-	server := NewServer(":8080", db, []byte("test-secret"))
-
-	req := makeGradeAuthenticatedRequest(t, http.MethodGet, fmt.Sprintf("/grades?teacher_id=%d", teacher1.ID), nil, account)
-	w := httptest.NewRecorder()
-
-	server.handleListGrades(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("handleListGrades() status = %d, want %d", w.Code, http.StatusOK)
-	}
-
-	var grades []edutrack.Grade
-	if err := json.NewDecoder(w.Body).Decode(&grades); err != nil {
-		t.Fatalf("Failed to decode response: %v", err)
-	}
-
-	if len(grades) != 1 {
-		t.Errorf("handleListGrades() with teacher_id filter returned %d grades, want 1", len(grades))
+		t.Errorf("handleListGrades() with topic_id filter returned %d grades, want 1", len(grades))
 	}
 }
 
@@ -343,17 +318,13 @@ func TestHandleListGrades_TenantIsolation(t *testing.T) {
 	student1 := createGradeTestStudent(t, db, tenant1.ID, studentAccount1.ID, career1.ID)
 	student2 := createGradeTestStudent(t, db, tenant2.ID, studentAccount2.ID, career2.ID)
 
-	teacherAccount1 := createGradeTestAccount(t, db, tenant1.ID, "teacher1@test.com", "Teacher 1", edutrack.RoleTeacher)
-	teacherAccount2 := createGradeTestAccount(t, db, tenant2.ID, "teacher2@test.com", "Teacher 2", edutrack.RoleTeacher)
-	teacher1 := createGradeTestTeacher(t, db, tenant1.ID, teacherAccount1.ID)
-	teacher2 := createGradeTestTeacher(t, db, tenant2.ID, teacherAccount2.ID)
+	subject1 := createGradeTestSubject(t, db, tenant1.ID, career1.ID)
+	subject2 := createGradeTestSubject(t, db, tenant2.ID, career2.ID)
+	topic1 := createGradeTestTopic(t, db, tenant1.ID, subject1.ID)
+	topic2 := createGradeTestTopic(t, db, tenant2.ID, subject2.ID)
 
-	subject1 := createGradeTestSubject(t, db, tenant1.ID)
-	subject2 := &edutrack.Subject{Name: "Subject 2", Code: "S2", TenantID: tenant2.ID}
-	db.Create(subject2)
-
-	createTestGrade(t, db, tenant1.ID, student1.ID, subject1.ID, teacher1.ID, 85.5)
-	createTestGrade(t, db, tenant2.ID, student2.ID, subject2.ID, teacher2.ID, 92.0)
+	createTestGrade(t, db, tenant1.ID, student1.ID, topic1.ID, 85.5)
+	createTestGrade(t, db, tenant2.ID, student2.ID, topic2.ID, 92.0)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -377,11 +348,10 @@ func TestHandleGetGrade_Success(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	grade := createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 85.5)
+	grade := createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 85.5)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -453,12 +423,10 @@ func TestHandleGetGrade_ForbiddenCrossTenant(t *testing.T) {
 	db.Create(career2)
 	studentAccount2 := createGradeTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 	student2 := createGradeTestStudent(t, db, tenant2.ID, studentAccount2.ID, career2.ID)
-	teacherAccount2 := createGradeTestAccount(t, db, tenant2.ID, "teacher2@test.com", "Teacher 2", edutrack.RoleTeacher)
-	teacher2 := createGradeTestTeacher(t, db, tenant2.ID, teacherAccount2.ID)
-	subject2 := &edutrack.Subject{Name: "Subject 2", Code: "S2", TenantID: tenant2.ID}
-	db.Create(subject2)
+	subject2 := createGradeTestSubject(t, db, tenant2.ID, career2.ID)
+	topic2 := createGradeTestTopic(t, db, tenant2.ID, subject2.ID)
 
-	grade2 := createTestGrade(t, db, tenant2.ID, student2.ID, subject2.ID, teacher2.ID, 85.5)
+	grade2 := createTestGrade(t, db, tenant2.ID, student2.ID, topic2.ID, 85.5)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -480,9 +448,8 @@ func TestHandleCreateGrade_Success(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -490,8 +457,7 @@ func TestHandleCreateGrade_Success(t *testing.T) {
 		Value:     95.5,
 		Notes:     "Excellent work",
 		StudentID: student.ID,
-		SubjectID: subject.ID,
-		TeacherID: teacher.ID,
+		TopicID:   topic.ID,
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -525,9 +491,8 @@ func TestHandleCreateGrade_VariousValues(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -538,8 +503,7 @@ func TestHandleCreateGrade_VariousValues(t *testing.T) {
 			reqBody := CreateGradeRequest{
 				Value:     value,
 				StudentID: student.ID,
-				SubjectID: subject.ID,
-				TeacherID: teacher.ID,
+				TopicID:   topic.ID,
 			}
 			body, _ := json.Marshal(reqBody)
 
@@ -573,7 +537,7 @@ func TestHandleCreateGrade_MissingFields(t *testing.T) {
 		name    string
 		request CreateGradeRequest
 	}{
-		{"missing student_id", CreateGradeRequest{Value: 85.5, SubjectID: 1}},
+		{"missing topic_id", CreateGradeRequest{Value: 85.5, TopicID: 1}},
 		{"missing subject_id", CreateGradeRequest{Value: 85.5, StudentID: 1}},
 		{"missing both ids", CreateGradeRequest{Value: 85.5}},
 	}
@@ -617,11 +581,10 @@ func TestHandleUpdateGrade_Success(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	grade := createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 70.0)
+	grade := createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 70.0)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -658,11 +621,10 @@ func TestHandleUpdateGrade_UpdateNotes(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	grade := createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 85.5)
+	grade := createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 85.5)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -697,11 +659,10 @@ func TestHandleUpdateGrade_UpdateAllFields(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	grade := createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 70.0)
+	grade := createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 70.0)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -768,12 +729,10 @@ func TestHandleUpdateGrade_ForbiddenCrossTenant(t *testing.T) {
 	db.Create(career2)
 	studentAccount2 := createGradeTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 	student2 := createGradeTestStudent(t, db, tenant2.ID, studentAccount2.ID, career2.ID)
-	teacherAccount2 := createGradeTestAccount(t, db, tenant2.ID, "teacher2@test.com", "Teacher 2", edutrack.RoleTeacher)
-	teacher2 := createGradeTestTeacher(t, db, tenant2.ID, teacherAccount2.ID)
-	subject2 := &edutrack.Subject{Name: "Subject 2", Code: "S2", TenantID: tenant2.ID}
-	db.Create(subject2)
+	subject2 := createGradeTestSubject(t, db, tenant2.ID, career2.ID)
+	topic2 := createGradeTestTopic(t, db, tenant2.ID, subject2.ID)
 
-	grade2 := createTestGrade(t, db, tenant2.ID, student2.ID, subject2.ID, teacher2.ID, 85.5)
+	grade2 := createTestGrade(t, db, tenant2.ID, student2.ID, topic2.ID, 85.5)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -799,11 +758,10 @@ func TestHandleDeleteGrade_Success(t *testing.T) {
 	career := createGradeTestCareer(t, db, tenant.ID)
 	studentAccount := createGradeTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
 	student := createGradeTestStudent(t, db, tenant.ID, studentAccount.ID, career.ID)
-	teacherAccount := createGradeTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
-	teacher := createGradeTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createGradeTestSubject(t, db, tenant.ID)
+	subject := createGradeTestSubject(t, db, tenant.ID, career.ID)
+	topic := createGradeTestTopic(t, db, tenant.ID, subject.ID)
 
-	grade := createTestGrade(t, db, tenant.ID, student.ID, subject.ID, teacher.ID, 85.5)
+	grade := createTestGrade(t, db, tenant.ID, student.ID, topic.ID, 85.5)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -873,12 +831,11 @@ func TestHandleDeleteGrade_ForbiddenCrossTenant(t *testing.T) {
 	db.Create(career2)
 	studentAccount2 := createGradeTestAccount(t, db, tenant2.ID, "student2@test.com", "Student 2", edutrack.RoleTeacher)
 	student2 := createGradeTestStudent(t, db, tenant2.ID, studentAccount2.ID, career2.ID)
-	teacherAccount2 := createGradeTestAccount(t, db, tenant2.ID, "teacher2@test.com", "Teacher 2", edutrack.RoleTeacher)
-	teacher2 := createGradeTestTeacher(t, db, tenant2.ID, teacherAccount2.ID)
 	subject2 := &edutrack.Subject{Name: "Subject 2", Code: "S2", TenantID: tenant2.ID}
 	db.Create(subject2)
+	topic2 := createGradeTestTopic(t, db, tenant2.ID, subject2.ID)
 
-	grade2 := createTestGrade(t, db, tenant2.ID, student2.ID, subject2.ID, teacher2.ID, 85.5)
+	grade2 := createTestGrade(t, db, tenant2.ID, student2.ID, topic2.ID, 85.5)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -962,14 +919,20 @@ func BenchmarkHandleListGrades(b *testing.B) {
 	}
 	db.Create(subject)
 
+	topic := &edutrack.Topic{
+		Name:      "Benchmark Topic",
+		SubjectID: subject.ID,
+		TenantID:  tenant.ID,
+	}
+	db.Create(topic)
+
 	// Create 100 grade records for benchmark
 	for i := 0; i < 100; i++ {
 		db.Create(&edutrack.Grade{
 			Value:     float64(50 + i%51),
 			Notes:     "Benchmark grade",
 			StudentID: student.ID,
-			SubjectID: subject.ID,
-			TeacherID: teacher.ID,
+			TopicID:   topic.ID,
 			TenantID:  tenant.ID,
 		})
 	}

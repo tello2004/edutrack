@@ -38,4 +38,7 @@ type Subject struct {
 
 	// Students attending this subject.
 	Students []Student `gorm:"many2many:student_subjects;"`
+
+	// Topics that belong to this subject.
+	Topics []Topic
 }

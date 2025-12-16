@@ -34,6 +34,7 @@ func Migrate(db *gorm.DB) error {
 		&Account{},
 		&Career{},
 		&Subject{},
+		&Topic{},
 		&Teacher{},
 		&Student{},
 		&Attendance{},

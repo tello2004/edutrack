@@ -37,6 +37,11 @@ func (s *Server) handleListStudents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Calculate averages for each student.
+	for i := range students {
+		students[i].CalculateAverages(s.DB)
+	}
+
 	sendJSON(w, http.StatusOK, students)
 }
 
@@ -64,6 +69,9 @@ func (s *Server) handleGetStudent(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusForbidden, ErrForbidden)
 		return
 	}
+
+	// Calculate the student's averages.
+	student.CalculateAverages(s.DB)
 
 	sendJSON(w, http.StatusOK, student)
 }

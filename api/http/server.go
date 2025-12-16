@@ -142,6 +142,13 @@ func (s *Server) registerRoutes() {
 	s.router.HandleFunc("POST /subjects/{id}/students", protected(s.handleAddStudentToSubject))
 	s.router.HandleFunc("DELETE /subjects/{id}/students/{student_id}", protected(s.handleRemoveStudentFromSubject))
 
+	// Topics
+	s.router.HandleFunc("GET /topics", protected(s.handleListTopics))
+	s.router.HandleFunc("GET /topics/{id}", protected(s.handleGetTopic))
+	s.router.HandleFunc("POST /topics", protected(s.handleCreateTopic))
+	s.router.HandleFunc("PUT /topics/{id}", protected(s.handleUpdateTopic))
+	s.router.HandleFunc("DELETE /topics/{id}", protected(s.handleDeleteTopic))
+
 	// Attendances
 	s.router.HandleFunc("GET /attendances", protected(s.handleListAttendances))
 	s.router.HandleFunc("GET /attendances/{id}", protected(s.handleGetAttendance))

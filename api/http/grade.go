@@ -21,15 +21,12 @@ func (s *Server) handleListGrades(w http.ResponseWriter, r *http.Request) {
 	if studentID := r.URL.Query().Get("student_id"); studentID != "" {
 		query = query.Where("student_id = ?", studentID)
 	}
-	if subjectID := r.URL.Query().Get("subject_id"); subjectID != "" {
-		query = query.Where("subject_id = ?", subjectID)
-	}
-	if teacherID := r.URL.Query().Get("teacher_id"); teacherID != "" {
-		query = query.Where("teacher_id = ?", teacherID)
+	if topicID := r.URL.Query().Get("topic_id"); topicID != "" {
+		query = query.Where("topic_id = ?", topicID)
 	}
 
 	var grades []edutrack.Grade
-	if err := query.Preload("Student").Preload("Subject").Preload("Teacher").Find(&grades).Error; err != nil {
+	if err := query.Preload("Student").Preload("Topic.Subject").Find(&grades).Error; err != nil {
 		sendError(w, http.StatusInternalServerError, ErrInternalServer)
 		return
 	}
@@ -52,7 +49,7 @@ func (s *Server) handleGetGrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var grade edutrack.Grade
-	if err := s.DB.Preload("Student").Preload("Subject").Preload("Teacher").First(&grade, id).Error; err != nil {
+	if err := s.DB.Preload("Student").Preload("Topic.Subject").First(&grade, id).Error; err != nil {
 		sendError(w, http.StatusNotFound, ErrNotFound)
 		return
 	}
@@ -70,8 +67,7 @@ type CreateGradeRequest struct {
 	Value     float64 `json:"value"`
 	Notes     string  `json:"notes"`
 	StudentID uint    `json:"student_id"`
-	SubjectID uint    `json:"subject_id"`
-	TeacherID uint    `json:"teacher_id"`
+	TopicID   uint    `json:"topic_id"`
 }
 
 // handleCreateGrade handles POST /grades.
@@ -88,8 +84,19 @@ func (s *Server) handleCreateGrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.StudentID == 0 || req.SubjectID == 0 {
-		sendErrorMessage(w, http.StatusBadRequest, "El estudiante y la materia son requeridos.")
+	if req.StudentID == 0 || req.TopicID == 0 {
+		sendErrorMessage(w, http.StatusBadRequest, "El estudiante y el tema son requeridos.")
+		return
+	}
+
+	// Verify topic exists and belongs to the same tenant.
+	var topic edutrack.Topic
+	if err := s.DB.First(&topic, req.TopicID).Error; err != nil {
+		sendErrorMessage(w, http.StatusBadRequest, "El tema especificado no existe.")
+		return
+	}
+	if topic.TenantID != account.TenantID {
+		sendError(w, http.StatusForbidden, ErrForbidden)
 		return
 	}
 
@@ -97,8 +104,7 @@ func (s *Server) handleCreateGrade(w http.ResponseWriter, r *http.Request) {
 		Value:     req.Value,
 		Notes:     req.Notes,
 		StudentID: req.StudentID,
-		SubjectID: req.SubjectID,
-		TeacherID: req.TeacherID,
+		TopicID:   req.TopicID,
 		TenantID:  account.TenantID,
 	}
 
@@ -108,7 +114,7 @@ func (s *Server) handleCreateGrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reload with associations.
-	s.DB.Preload("Student").Preload("Subject").Preload("Teacher").First(grade, grade.ID)
+	s.DB.Preload("Student").Preload("Topic.Subject").First(grade, grade.ID)
 
 	sendJSON(w, http.StatusCreated, grade)
 }
@@ -163,7 +169,7 @@ func (s *Server) handleUpdateGrade(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reload with associations.
-	s.DB.Preload("Student").Preload("Subject").Preload("Teacher").First(&grade, grade.ID)
+	s.DB.Preload("Student").Preload("Topic.Subject").First(&grade, grade.ID)
 
 	sendJSON(w, http.StatusOK, grade)
 }

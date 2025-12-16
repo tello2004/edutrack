@@ -2,7 +2,7 @@ package edutrack
 
 import "gorm.io/gorm"
 
-// Grade represents a student's grade for a specific subject.
+// Grade represents a student's grade for a specific topic within a subject.
 type Grade struct {
 	gorm.Model
 
@@ -18,13 +18,9 @@ type Grade struct {
 	StudentID uint
 	Student   Student
 
-	// The subject this grade is for.
-	SubjectID uint
-	Subject   Subject
-
-	// The teacher who assigned this grade.
-	TeacherID uint
-	Teacher   Teacher
+	// The topic this grade is for.
+	TopicID uint
+	Topic   Topic
 
 	// TenantID for multi-tenant support.
 	TenantID string
