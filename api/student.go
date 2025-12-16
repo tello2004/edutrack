@@ -25,4 +25,7 @@ type Student struct {
 	// CareerID links the student to the career they are enrolled in.
 	CareerID uint
 	Career   Career
+
+	// Subjects this student is attending.
+	Subjects []Subject `gorm:"many2many:student_subjects;"`
 }

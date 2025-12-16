@@ -234,3 +234,158 @@ func (s *Server) handleDeleteSubject(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// handleListSubjectStudents handles GET /subjects/{id}/students.
+// It lists all students enrolled in a specific subject.
+// Access is granted to secretaries and the teacher of the subject.
+func (s *Server) handleListSubjectStudents(w http.ResponseWriter, r *http.Request) {
+	account := edutrack.AccountFromContext(r.Context())
+	if account == nil {
+		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, ErrBadRequest)
+		return
+	}
+
+	var subject edutrack.Subject
+	if err := s.DB.Preload("Teacher.Account").First(&subject, id).Error; err != nil {
+		sendError(w, http.StatusNotFound, ErrNotFound)
+		return
+	}
+
+	if subject.TenantID != account.TenantID {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
+	// Check permissions.
+	isSecretary := account.IsSecretary()
+	isTeacherOfSubject := subject.Teacher != nil && subject.Teacher.AccountID == account.ID
+
+	if !isSecretary && !isTeacherOfSubject {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
+	if err := s.DB.Model(&subject).Association("Students").Find(&subject.Students); err != nil {
+		sendError(w, http.StatusInternalServerError, ErrInternalServer)
+		return
+	}
+
+	sendJSON(w, http.StatusOK, subject.Students)
+}
+
+// AddStudentToSubjectRequest represents the request body for adding a student to a subject.
+type AddStudentToSubjectRequest struct {
+	StudentID uint `json:"student_id"`
+}
+
+// handleAddStudentToSubject handles POST /subjects/{id}/students.
+// It enrolls a student in a subject. Only secretaries can perform this action.
+func (s *Server) handleAddStudentToSubject(w http.ResponseWriter, r *http.Request) {
+	account := edutrack.AccountFromContext(r.Context())
+	if account == nil {
+		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	// Only secretaries can enroll students.
+	if !account.IsSecretary() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
+	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, ErrBadRequest)
+		return
+	}
+
+	var req AddStudentToSubjectRequest
+	if err := decodeJSON(r, &req); err != nil {
+		sendError(w, http.StatusBadRequest, ErrBadRequest)
+		return
+	}
+
+	var subject edutrack.Subject
+	if err := s.DB.First(&subject, id).Error; err != nil {
+		sendError(w, http.StatusNotFound, ErrNotFound)
+		return
+	}
+
+	var student edutrack.Student
+	if err := s.DB.First(&student, req.StudentID).Error; err != nil {
+		sendErrorMessage(w, http.StatusBadRequest, "Estudiante no encontrado.")
+		return
+	}
+
+	// Ensure both are in the same tenant.
+	if subject.TenantID != account.TenantID || student.TenantID != account.TenantID {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
+	if err := s.DB.Model(&subject).Association("Students").Append(&student); err != nil {
+		sendError(w, http.StatusInternalServerError, ErrInternalServer)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleRemoveStudentFromSubject handles DELETE /subjects/{id}/students/{student_id}.
+// It removes a student from a subject. Only secretaries can perform this action.
+func (s *Server) handleRemoveStudentFromSubject(w http.ResponseWriter, r *http.Request) {
+	account := edutrack.AccountFromContext(r.Context())
+	if account == nil {
+		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	// Only secretaries can un-enroll students.
+	if !account.IsSecretary() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
+	subjectID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, ErrBadRequest)
+		return
+	}
+
+	studentID, err := strconv.ParseUint(r.PathValue("student_id"), 10, 64)
+	if err != nil {
+		sendError(w, http.StatusBadRequest, ErrBadRequest)
+		return
+	}
+
+	var subject edutrack.Subject
+	if err := s.DB.First(&subject, subjectID).Error; err != nil {
+		sendError(w, http.StatusNotFound, ErrNotFound)
+		return
+	}
+
+	var student edutrack.Student
+	if err := s.DB.First(&student, studentID).Error; err != nil {
+		sendErrorMessage(w, http.StatusBadRequest, "Estudiante no encontrado.")
+		return
+	}
+
+	// Ensure both are in the same tenant.
+	if subject.TenantID != account.TenantID || student.TenantID != account.TenantID {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
+	if err := s.DB.Model(&subject).Association("Students").Delete(&student); err != nil {
+		sendError(w, http.StatusInternalServerError, ErrInternalServer)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

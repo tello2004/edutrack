@@ -190,6 +190,7 @@ func main() {
 		{"2024IIN002", "Paulina Aguilar Domínguez", "paulina.aguilar@estudiante.tecmm.edu.mx", 2, 2},
 	}
 
+	var students []edutrack.Student
 	for _, sd := range studentData {
 		password, _ := edutrack.HashPassword("student123")
 		account := edutrack.Account{
@@ -215,6 +216,18 @@ func main() {
 			app.errLogger.Fatalf("Failed to create student %s: %v", sd.studentID, err)
 		}
 		app.logger.Printf("Created student: %s (%s) - %s", sd.name, sd.studentID, careers[sd.careerIdx].Code)
+		students = append(students, student)
+	}
+
+	// Enroll students in subjects.
+	app.logger.Println("Enrolling students in subjects...")
+	for _, s := range students {
+		var subjectsToEnroll []edutrack.Subject
+		app.db.Where("career_id = ? AND semester = ?", s.CareerID, s.Semester).Find(&subjectsToEnroll)
+		if len(subjectsToEnroll) > 0 {
+			app.db.Model(&s).Association("Subjects").Append(subjectsToEnroll)
+			app.logger.Printf("Enrolled student %s in %d subjects for semester %d", s.StudentID, len(subjectsToEnroll), s.Semester)
+		}
 	}
 
 	// Print summary.

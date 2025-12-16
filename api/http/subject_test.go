@@ -821,6 +821,140 @@ func TestHandleDeleteSubject_ForbiddenCrossTenant(t *testing.T) {
 	}
 }
 
+func TestHandleAddStudentToSubject_Success(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	secretary := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	studentAcc := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAcc.ID, career.ID, 1)
+	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	body, _ := json.Marshal(AddStudentToSubjectRequest{StudentID: student.ID})
+	req := makeSubjectAuthenticatedRequest(t, http.MethodPost, fmt.Sprintf("/subjects/%d/students", subject.ID), body, secretary)
+	req.SetPathValue("id", fmt.Sprintf("%d", subject.ID))
+	w := httptest.NewRecorder()
+
+	server.handleAddStudentToSubject(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("handleAddStudentToSubject() status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+
+	var updatedSubject edutrack.Subject
+	db.Preload("Students").First(&updatedSubject, subject.ID)
+	if len(updatedSubject.Students) != 1 {
+		t.Errorf("student was not added to subject, count = %d, want 1", len(updatedSubject.Students))
+	}
+}
+
+func TestHandleAddStudentToSubject_ForbiddenForTeacher(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	teacher := createSubjectTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	studentAcc := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAcc.ID, career.ID, 1)
+	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	body, _ := json.Marshal(AddStudentToSubjectRequest{StudentID: student.ID})
+	req := makeSubjectAuthenticatedRequest(t, http.MethodPost, fmt.Sprintf("/subjects/%d/students", subject.ID), body, teacher)
+	req.SetPathValue("id", fmt.Sprintf("%d", subject.ID))
+	w := httptest.NewRecorder()
+
+	server.handleAddStudentToSubject(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("handleAddStudentToSubject() status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestHandleListSubjectStudents_Success(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	secretary := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	studentAcc := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAcc.ID, career.ID, 1)
+	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+	db.Model(&subject).Association("Students").Append(student)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeSubjectAuthenticatedRequest(t, http.MethodGet, fmt.Sprintf("/subjects/%d/students", subject.ID), nil, secretary)
+	req.SetPathValue("id", fmt.Sprintf("%d", subject.ID))
+	w := httptest.NewRecorder()
+
+	server.handleListSubjectStudents(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("handleListSubjectStudents() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var students []edutrack.Student
+	if err := json.NewDecoder(w.Body).Decode(&students); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(students) != 1 {
+		t.Errorf("handleListSubjectStudents() returned %d students, want 1", len(students))
+	}
+}
+
+func TestHandleListSubjectStudents_ForbiddenForOtherTeacher(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	otherTeacher := createSubjectTestAccount(t, db, tenant.ID, "other_teacher@test.com", "Other Teacher", edutrack.RoleTeacher)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeSubjectAuthenticatedRequest(t, http.MethodGet, fmt.Sprintf("/subjects/%d/students", subject.ID), nil, otherTeacher)
+	req.SetPathValue("id", fmt.Sprintf("%d", subject.ID))
+	w := httptest.NewRecorder()
+
+	server.handleListSubjectStudents(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("handleListSubjectStudents() status for other teacher = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestHandleRemoveStudentFromSubject_Success(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	secretary := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	studentAcc := createStudentTestAccount(t, db, tenant.ID, "student@test.com", "Student", edutrack.RoleTeacher)
+	student := createTestStudent(t, db, tenant.ID, "2024001", studentAcc.ID, career.ID, 1)
+	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+	db.Model(&subject).Association("Students").Append(student)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeSubjectAuthenticatedRequest(t, http.MethodDelete, fmt.Sprintf("/subjects/%d/students/%d", subject.ID, student.ID), nil, secretary)
+	req.SetPathValue("id", fmt.Sprintf("%d", subject.ID))
+	req.SetPathValue("student_id", fmt.Sprintf("%d", student.ID))
+	w := httptest.NewRecorder()
+
+	server.handleRemoveStudentFromSubject(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Errorf("handleRemoveStudentFromSubject() status = %d, want %d", w.Code, http.StatusNoContent)
+	}
+
+	var updatedSubject edutrack.Subject
+	db.Preload("Students").First(&updatedSubject, subject.ID)
+	if len(updatedSubject.Students) != 0 {
+		t.Errorf("student was not removed from subject, count = %d, want 0", len(updatedSubject.Students))
+	}
+}
+
 func BenchmarkHandleListSubjects(b *testing.B) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),

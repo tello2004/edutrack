@@ -35,4 +35,7 @@ type Subject struct {
 	// Teacher assigned to this subject.
 	TeacherID *uint
 	Teacher   *Teacher
+
+	// Students attending this subject.
+	Students []Student `gorm:"many2many:student_subjects;"`
 }
