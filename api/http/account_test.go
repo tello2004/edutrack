@@ -664,6 +664,32 @@ func TestHandleDeleteAccount_ForbiddenCrossTenant(t *testing.T) {
 	}
 }
 
+func TestHandleDeleteAccount_ForbiddenForTeacher(t *testing.T) {
+	db := setupAccountTestDB(t)
+	tenant := createAccountTestTenant(t, db)
+	deleterAccount := createAccountTestAccount(t, db, tenant.ID, "teacher@test.com", "password123", edutrack.RoleTeacher)
+	targetAccount := createAccountTestAccount(t, db, tenant.ID, "target@test.com", "password123", edutrack.RoleTeacher)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeAuthenticatedRequest(t, http.MethodDelete, fmt.Sprintf("/accounts/%d", targetAccount.ID), nil, deleterAccount)
+	req.SetPathValue("id", fmt.Sprintf("%d", targetAccount.ID))
+	w := httptest.NewRecorder()
+
+	server.handleDeleteAccount(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("handleDeleteAccount() by teacher status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+
+	// Verify account was NOT deleted
+	var found edutrack.Account
+	err := db.First(&found, targetAccount.ID).Error
+	if err != nil {
+		t.Error("handleDeleteAccount() account was deleted by teacher")
+	}
+}
+
 func BenchmarkHandleListAccounts(b *testing.B) {
 	db, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),

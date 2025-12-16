@@ -192,6 +192,12 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only secretaries can delete accounts.
+	if !account.IsSecretary() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, ErrBadRequest)
