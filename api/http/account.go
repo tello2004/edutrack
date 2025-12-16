@@ -15,27 +15,38 @@ func (s *Server) handleListAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := s.DB.Where("tenant_id = ?", account.TenantID)
-
-	// Optional filters.
-	if name := r.URL.Query().Get("name"); name != "" {
-		query = query.Where("name LIKE ?", "%"+name+"%")
-	}
-	if email := r.URL.Query().Get("email"); email != "" {
-		query = query.Where("email LIKE ?", "%"+email+"%")
-	}
-	if active := r.URL.Query().Get("active"); active != "" {
-		if active == "true" {
-			query = query.Where("active = ?", 1)
-		} else {
-			query = query.Where("active = ?", 0)
-		}
-	}
-
 	var accounts []edutrack.Account
-	if err := query.Find(&accounts).Error; err != nil {
-		sendError(w, http.StatusInternalServerError, ErrInternalServer)
-		return
+	if account.IsStudent() {
+		// Students can only see their own account.
+		var ownAccount edutrack.Account
+		if err := s.DB.Where("id = ? AND tenant_id = ?", account.ID, account.TenantID).First(&ownAccount).Error; err != nil {
+			sendError(w, http.StatusNotFound, ErrNotFound)
+			return
+		}
+		accounts = []edutrack.Account{ownAccount}
+	} else {
+		// Teachers and secretaries can see all accounts with filters.
+		query := s.DB.Where("tenant_id = ?", account.TenantID)
+
+		// Optional filters.
+		if name := r.URL.Query().Get("name"); name != "" {
+			query = query.Where("name LIKE ?", "%"+name+"%")
+		}
+		if email := r.URL.Query().Get("email"); email != "" {
+			query = query.Where("email LIKE ?", "%"+email+"%")
+		}
+		if active := r.URL.Query().Get("active"); active != "" {
+			if active == "true" {
+				query = query.Where("active = ?", 1)
+			} else {
+				query = query.Where("active = ?", 0)
+			}
+		}
+
+		if err := query.Find(&accounts).Error; err != nil {
+			sendError(w, http.StatusInternalServerError, ErrInternalServer)
+			return
+		}
 	}
 
 	sendJSON(w, http.StatusOK, accounts)
@@ -67,6 +78,12 @@ func (s *Server) handleGetAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if account.IsStudent() && found.ID != account.ID {
+		// Students can only access their own account.
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
 	sendJSON(w, http.StatusOK, found)
 }
 
@@ -75,6 +92,7 @@ type CreateAccountRequest struct {
 	Name     string `json:"name"`
 	Email    string `json:"email"`
 	Password string `json:"password"`
+	Role     string `json:"role"`
 }
 
 // handleCreateAccount handles POST /accounts.
@@ -82,6 +100,12 @@ func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 	account := edutrack.AccountFromContext(r.Context())
 	if account == nil {
 		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	// Only teachers and secretaries can create accounts.
+	if account.IsStudent() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
 		return
 	}
 
@@ -103,10 +127,26 @@ func (s *Server) handleCreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	role := edutrack.RoleTeacher // default
+	if req.Role != "" {
+		switch req.Role {
+		case string(edutrack.RoleSecretary):
+			role = edutrack.RoleSecretary
+		case string(edutrack.RoleTeacher):
+			role = edutrack.RoleTeacher
+		case string(edutrack.RoleStudent):
+			role = edutrack.RoleStudent
+		default:
+			sendErrorMessage(w, http.StatusBadRequest, "Rol inválido.")
+			return
+		}
+	}
+
 	newAccount := &edutrack.Account{
 		Name:     req.Name,
 		Email:    req.Email,
 		Password: hashedPassword,
+		Role:     role,
 		Active:   true,
 		TenantID: account.TenantID,
 	}
@@ -158,22 +198,42 @@ func (s *Server) handleUpdateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name != nil {
-		existing.Name = *req.Name
-	}
-	if req.Email != nil {
-		existing.Email = *req.Email
-	}
-	if req.Password != nil {
+	if account.IsStudent() {
+		// Students can only update their own password.
+		if existing.ID != account.ID {
+			sendError(w, http.StatusForbidden, ErrForbidden)
+			return
+		}
+		if req.Password == nil {
+			sendErrorMessage(w, http.StatusBadRequest, "Solo se puede actualizar la contraseña.")
+			return
+		}
+		// Only update password.
 		hashedPassword, err := edutrack.HashPassword(*req.Password)
 		if err != nil {
 			sendError(w, http.StatusInternalServerError, ErrInternalServer)
 			return
 		}
 		existing.Password = hashedPassword
-	}
-	if req.Active != nil {
-		existing.Active = *req.Active
+	} else {
+		// Teachers and secretaries can update all fields.
+		if req.Name != nil {
+			existing.Name = *req.Name
+		}
+		if req.Email != nil {
+			existing.Email = *req.Email
+		}
+		if req.Password != nil {
+			hashedPassword, err := edutrack.HashPassword(*req.Password)
+			if err != nil {
+				sendError(w, http.StatusInternalServerError, ErrInternalServer)
+				return
+			}
+			existing.Password = hashedPassword
+		}
+		if req.Active != nil {
+			existing.Active = *req.Active
+		}
 	}
 
 	if err := s.DB.Save(&existing).Error; err != nil {

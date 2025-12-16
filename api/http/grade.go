@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"gorm.io/gorm"
 	edutrack "lahuerta.tecmm.edu.mx/edutrack"
 )
 
@@ -15,14 +16,25 @@ func (s *Server) handleListGrades(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := s.DB.Where("tenant_id = ?", account.TenantID)
+	var query *gorm.DB
+	if account.IsStudent() {
+		// Students can only see their own grades.
+		var student edutrack.Student
+		if err := s.DB.Where("account_id = ? AND tenant_id = ?", account.ID, account.TenantID).First(&student).Error; err != nil {
+			sendError(w, http.StatusNotFound, ErrNotFound)
+			return
+		}
+		query = s.DB.Where("student_id = ? AND tenant_id = ?", student.ID, account.TenantID)
+	} else {
+		query = s.DB.Where("tenant_id = ?", account.TenantID)
 
-	// Optional filters.
-	if studentID := r.URL.Query().Get("student_id"); studentID != "" {
-		query = query.Where("student_id = ?", studentID)
-	}
-	if topicID := r.URL.Query().Get("topic_id"); topicID != "" {
-		query = query.Where("topic_id = ?", topicID)
+		// Optional filters for teachers/secretaries.
+		if studentID := r.URL.Query().Get("student_id"); studentID != "" {
+			query = query.Where("student_id = ?", studentID)
+		}
+		if topicID := r.URL.Query().Get("topic_id"); topicID != "" {
+			query = query.Where("topic_id = ?", topicID)
+		}
 	}
 
 	var grades []edutrack.Grade
@@ -59,6 +71,19 @@ func (s *Server) handleGetGrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if account.IsStudent() {
+		// Students can only access their own grades.
+		var student edutrack.Student
+		if err := s.DB.Where("account_id = ? AND tenant_id = ?", account.ID, account.TenantID).First(&student).Error; err != nil {
+			sendError(w, http.StatusNotFound, ErrNotFound)
+			return
+		}
+		if grade.StudentID != student.ID {
+			sendError(w, http.StatusForbidden, ErrForbidden)
+			return
+		}
+	}
+
 	sendJSON(w, http.StatusOK, grade)
 }
 
@@ -75,6 +100,12 @@ func (s *Server) handleCreateGrade(w http.ResponseWriter, r *http.Request) {
 	account := edutrack.AccountFromContext(r.Context())
 	if account == nil {
 		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	// Only teachers and secretaries can create grades.
+	if account.IsStudent() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
 		return
 	}
 
@@ -133,6 +164,12 @@ func (s *Server) handleUpdateGrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Only teachers and secretaries can update grades.
+	if account.IsStudent() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
+		return
+	}
+
 	id, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
 	if err != nil {
 		sendError(w, http.StatusBadRequest, ErrBadRequest)
@@ -179,6 +216,12 @@ func (s *Server) handleDeleteGrade(w http.ResponseWriter, r *http.Request) {
 	account := edutrack.AccountFromContext(r.Context())
 	if account == nil {
 		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	// Only teachers and secretaries can delete grades.
+	if account.IsStudent() {
+		sendError(w, http.StatusForbidden, ErrForbidden)
 		return
 	}
 

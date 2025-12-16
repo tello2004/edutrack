@@ -624,6 +624,61 @@ func TestWithRole_Teacher(t *testing.T) {
 	})
 }
 
+func TestWithRole_Student(t *testing.T) {
+	db := setupTestDB(t)
+	tenant := createTestTenant(t, db)
+	secretary := createTestAccount(t, db, tenant.ID, "secretary@example.com", "password123", edutrack.RoleSecretary)
+	teacher := createTestAccount(t, db, tenant.ID, "teacher@example.com", "password123", edutrack.RoleTeacher)
+	student := createTestAccount(t, db, tenant.ID, "student@example.com", "password123", edutrack.RoleStudent)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	testHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}
+
+	wrappedHandler := server.withStudent(testHandler)
+
+	t.Run("student can access", func(t *testing.T) {
+		token, _ := server.generateToken(student)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		wrappedHandler(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("withStudent() status = %d, want %d for student", w.Code, http.StatusOK)
+		}
+	})
+
+	t.Run("secretary cannot access", func(t *testing.T) {
+		token, _ := server.generateToken(secretary)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		wrappedHandler(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("withStudent() status = %d, want %d for secretary", w.Code, http.StatusForbidden)
+		}
+	})
+
+	t.Run("teacher cannot access", func(t *testing.T) {
+		token, _ := server.generateToken(teacher)
+		req := httptest.NewRequest(http.MethodGet, "/test", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		wrappedHandler(w, req)
+
+		if w.Code != http.StatusForbidden {
+			t.Errorf("withStudent() status = %d, want %d for teacher", w.Code, http.StatusForbidden)
+		}
+	})
+}
+
 func TestGenerateToken(t *testing.T) {
 	db := setupTestDB(t)
 	tenant := createTestTenant(t, db)

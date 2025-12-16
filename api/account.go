@@ -11,6 +11,9 @@ const (
 
 	// RoleTeacher is a teacher who can manage academic tasks (grades, attendance).
 	RoleTeacher Role = "teacher"
+
+	// RoleStudent is a student who can view their own information and grades.
+	RoleStudent Role = "student"
 )
 
 // Account represents a user account for authentication.
@@ -47,4 +50,9 @@ func (a *Account) IsSecretary() bool {
 // IsTeacher returns true if the account has teacher role.
 func (a *Account) IsTeacher() bool {
 	return a.Role == RoleTeacher
+}
+
+// IsStudent returns true if the account has student role.
+func (a *Account) IsStudent() bool {
+	return a.Role == RoleStudent
 }

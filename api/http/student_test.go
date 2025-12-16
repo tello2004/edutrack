@@ -401,13 +401,14 @@ func TestHandleCreateStudent_Success(t *testing.T) {
 	tenant := createStudentTestTenant(t, db)
 	account := createStudentTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	career := createStudentTestCareer(t, db, tenant.ID)
-	studentAccount := createStudentTestAccount(t, db, tenant.ID, "newstudent@test.com", "New Student", edutrack.RoleTeacher)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
 	reqBody := CreateStudentRequest{
 		StudentID: "2024001",
-		AccountID: studentAccount.ID,
+		Name:      "New Student",
+		Email:     "newstudent@test.com",
+		Password:  "password123",
 		CareerID:  career.ID,
 		Semester:  1,
 	}
@@ -451,8 +452,10 @@ func TestHandleCreateStudent_MissingFields(t *testing.T) {
 		name    string
 		request CreateStudentRequest
 	}{
-		{"missing student_id", CreateStudentRequest{AccountID: 1}},
-		{"missing account_id", CreateStudentRequest{StudentID: "2024001"}},
+		{"missing student_id", CreateStudentRequest{Name: "Name", Email: "email@test.com", Password: "pass", CareerID: 1, Semester: 1}},
+		{"missing name", CreateStudentRequest{StudentID: "2024001", Email: "email@test.com", Password: "pass", CareerID: 1, Semester: 1}},
+		{"missing email", CreateStudentRequest{StudentID: "2024001", Name: "Name", Password: "pass", CareerID: 1, Semester: 1}},
+		{"missing password", CreateStudentRequest{StudentID: "2024001", Name: "Name", Email: "email@test.com", CareerID: 1, Semester: 1}},
 		{"all empty", CreateStudentRequest{}},
 	}
 

@@ -15,31 +15,44 @@ func (s *Server) handleListStudents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := s.DB.Where("students.tenant_id = ?", account.TenantID)
-
-	// Optional filters.
-	if careerID := r.URL.Query().Get("career_id"); careerID != "" {
-		query = query.Where("career_id = ?", careerID)
-	}
-	if semester := r.URL.Query().Get("semester"); semester != "" {
-		query = query.Where("semester = ?", semester)
-	}
-	if studentID := r.URL.Query().Get("student_id"); studentID != "" {
-		query = query.Where("student_id LIKE ?", "%"+studentID+"%")
-	}
-	if name := r.URL.Query().Get("name"); name != "" {
-		query = query.Joins("Account").Where("Account.name LIKE ?", "%"+name+"%")
-	}
-
 	var students []edutrack.Student
-	if err := query.Preload("Account").Preload("Career").Find(&students).Error; err != nil {
-		sendError(w, http.StatusInternalServerError, ErrInternalServer)
-		return
-	}
 
-	// Calculate averages for each student.
-	for i := range students {
-		students[i].CalculateAverages(s.DB)
+	if account.IsStudent() {
+		// Students can only see their own information.
+		var student edutrack.Student
+		if err := s.DB.Preload("Account").Preload("Career").Where("account_id = ? AND tenant_id = ?", account.ID, account.TenantID).First(&student).Error; err != nil {
+			sendError(w, http.StatusNotFound, ErrNotFound)
+			return
+		}
+		student.CalculateAverages(s.DB)
+		students = []edutrack.Student{student}
+	} else {
+		// Teachers and secretaries can see all students with filters.
+		query := s.DB.Where("students.tenant_id = ?", account.TenantID)
+
+		// Optional filters.
+		if careerID := r.URL.Query().Get("career_id"); careerID != "" {
+			query = query.Where("career_id = ?", careerID)
+		}
+		if semester := r.URL.Query().Get("semester"); semester != "" {
+			query = query.Where("semester = ?", semester)
+		}
+		if studentID := r.URL.Query().Get("student_id"); studentID != "" {
+			query = query.Where("student_id LIKE ?", "%"+studentID+"%")
+		}
+		if name := r.URL.Query().Get("name"); name != "" {
+			query = query.Joins("Account").Where("Account.name LIKE ?", "%"+name+"%")
+		}
+
+		if err := query.Preload("Account").Preload("Career").Find(&students).Error; err != nil {
+			sendError(w, http.StatusInternalServerError, ErrInternalServer)
+			return
+		}
+
+		// Calculate averages for each student.
+		for i := range students {
+			students[i].CalculateAverages(s.DB)
+		}
 	}
 
 	sendJSON(w, http.StatusOK, students)
@@ -57,6 +70,19 @@ func (s *Server) handleGetStudent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		sendError(w, http.StatusBadRequest, ErrBadRequest)
 		return
+	}
+
+	if account.IsStudent() {
+		// Students can only access their own student record.
+		var ownStudent edutrack.Student
+		if err := s.DB.Where("account_id = ? AND tenant_id = ?", account.ID, account.TenantID).First(&ownStudent).Error; err != nil {
+			sendError(w, http.StatusNotFound, ErrNotFound)
+			return
+		}
+		if ownStudent.ID != uint(id) {
+			sendError(w, http.StatusForbidden, ErrForbidden)
+			return
+		}
 	}
 
 	var student edutrack.Student
@@ -79,7 +105,9 @@ func (s *Server) handleGetStudent(w http.ResponseWriter, r *http.Request) {
 // CreateStudentRequest represents the request body for creating a student.
 type CreateStudentRequest struct {
 	StudentID string `json:"student_id"`
-	AccountID uint   `json:"account_id"`
+	Name      string `json:"name"`
+	Email     string `json:"email"`
+	Password  string `json:"password"`
 	CareerID  uint   `json:"career_id"`
 	Semester  int    `json:"semester"`
 }
@@ -98,8 +126,8 @@ func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.StudentID == "" || req.AccountID == 0 {
-		sendErrorMessage(w, http.StatusBadRequest, "El ID de estudiante y la cuenta son requeridos.")
+	if req.StudentID == "" || req.Name == "" || req.Email == "" || req.Password == "" {
+		sendErrorMessage(w, http.StatusBadRequest, "El ID de estudiante, nombre, email y contraseña son requeridos.")
 		return
 	}
 
@@ -108,15 +136,40 @@ func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hash the password.
+	hashedPassword, err := edutrack.HashPassword(req.Password)
+	if err != nil {
+		sendError(w, http.StatusInternalServerError, ErrInternalServer)
+		return
+	}
+
+	// Create the account first.
+	newAccount := &edutrack.Account{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: hashedPassword,
+		Role:     edutrack.RoleStudent,
+		Active:   true,
+		TenantID: account.TenantID,
+	}
+
+	if err := s.DB.Create(newAccount).Error; err != nil {
+		sendError(w, http.StatusInternalServerError, ErrInternalServer)
+		return
+	}
+
+	// Now create the student linked to the account.
 	student := &edutrack.Student{
 		StudentID: req.StudentID,
-		AccountID: req.AccountID,
+		AccountID: newAccount.ID,
 		CareerID:  req.CareerID,
 		Semester:  req.Semester,
 		TenantID:  account.TenantID,
 	}
 
 	if err := s.DB.Create(student).Error; err != nil {
+		// If student creation fails, delete the account.
+		s.DB.Delete(newAccount)
 		sendError(w, http.StatusInternalServerError, ErrInternalServer)
 		return
 	}

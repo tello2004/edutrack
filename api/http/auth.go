@@ -260,3 +260,8 @@ func (s *Server) withSecretary(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) withTeacher(next http.HandlerFunc) http.HandlerFunc {
 	return s.withRole(edutrack.RoleTeacher, next)
 }
+
+// withStudent is a middleware that ensures only students can access the endpoint.
+func (s *Server) withStudent(next http.HandlerFunc) http.HandlerFunc {
+	return s.withRole(edutrack.RoleStudent, next)
+}
