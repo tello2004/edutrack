@@ -81,16 +81,16 @@ func main() {
 	// Create subjects.
 	app.logger.Println("Creating subjects...")
 	subjects := []edutrack.Subject{
-		{Name: "Cálculo Diferencial", Code: "MAT101", Description: "Fundamentos de cálculo diferencial", Credits: 5, TenantID: tenant.ID},
-		{Name: "Cálculo Integral", Code: "MAT102", Description: "Fundamentos de cálculo integral", Credits: 5, TenantID: tenant.ID},
-		{Name: "Programación I", Code: "PRG101", Description: "Introducción a la programación", Credits: 5, TenantID: tenant.ID},
-		{Name: "Programación II", Code: "PRG102", Description: "Programación orientada a objetos", Credits: 5, TenantID: tenant.ID},
-		{Name: "Base de Datos", Code: "BDD101", Description: "Fundamentos de bases de datos", Credits: 4, TenantID: tenant.ID},
-		{Name: "Redes de Computadoras", Code: "RED101", Description: "Fundamentos de redes", Credits: 4, TenantID: tenant.ID},
-		{Name: "Contabilidad I", Code: "CON101", Description: "Fundamentos de contabilidad", Credits: 4, TenantID: tenant.ID},
-		{Name: "Administración I", Code: "ADM101", Description: "Fundamentos de administración", Credits: 4, TenantID: tenant.ID},
-		{Name: "Física I", Code: "FIS101", Description: "Mecánica clásica", Credits: 5, TenantID: tenant.ID},
-		{Name: "Química", Code: "QUI101", Description: "Química general", Credits: 4, TenantID: tenant.ID},
+		{Name: "Cálculo Diferencial", Code: "MAT101", Description: "Fundamentos de cálculo diferencial", Credits: 5, TenantID: tenant.ID, CareerID: careers[0].ID, Semester: 1},
+		{Name: "Cálculo Integral", Code: "MAT102", Description: "Fundamentos de cálculo integral", Credits: 5, TenantID: tenant.ID, CareerID: careers[0].ID, Semester: 2},
+		{Name: "Programación I", Code: "PRG101", Description: "Introducción a la programación", Credits: 5, TenantID: tenant.ID, CareerID: careers[0].ID, Semester: 1},
+		{Name: "Programación II", Code: "PRG102", Description: "Programación orientada a objetos", Credits: 5, TenantID: tenant.ID, CareerID: careers[0].ID, Semester: 2},
+		{Name: "Base de Datos", Code: "BDD101", Description: "Fundamentos de bases de datos", Credits: 4, TenantID: tenant.ID, CareerID: careers[0].ID, Semester: 3},
+		{Name: "Redes de Computadoras", Code: "RED101", Description: "Fundamentos de redes", Credits: 4, TenantID: tenant.ID, CareerID: careers[0].ID, Semester: 4},
+		{Name: "Contabilidad I", Code: "CON101", Description: "Fundamentos de contabilidad", Credits: 4, TenantID: tenant.ID, CareerID: careers[1].ID, Semester: 1},
+		{Name: "Administración I", Code: "ADM101", Description: "Fundamentos de administración", Credits: 4, TenantID: tenant.ID, CareerID: careers[1].ID, Semester: 1},
+		{Name: "Física I", Code: "FIS101", Description: "Mecánica clásica", Credits: 5, TenantID: tenant.ID, CareerID: careers[2].ID, Semester: 1},
+		{Name: "Química", Code: "QUI101", Description: "Química general", Credits: 4, TenantID: tenant.ID, CareerID: careers[2].ID, Semester: 1},
 	}
 
 	for i := range subjects {
@@ -99,15 +99,6 @@ func main() {
 		}
 		app.logger.Printf("Created subject: %s (%s)", subjects[i].Name, subjects[i].Code)
 	}
-
-	// Associate subjects with careers.
-	app.logger.Println("Associating subjects with careers...")
-	// ISC: MAT101, MAT102, PRG101, PRG102, BDD101, RED101, FIS101
-	app.db.Model(&careers[0]).Association("Subjects").Append(&subjects[0], &subjects[1], &subjects[2], &subjects[3], &subjects[4], &subjects[5], &subjects[8])
-	// LAD: MAT101, CON101, ADM101
-	app.db.Model(&careers[1]).Association("Subjects").Append(&subjects[0], &subjects[6], &subjects[7])
-	// IIN: MAT101, MAT102, FIS101, QUI101, ADM101
-	app.db.Model(&careers[2]).Association("Subjects").Append(&subjects[0], &subjects[1], &subjects[8], &subjects[9], &subjects[7])
 
 	// Create accounts and teachers.
 	app.logger.Println("Creating accounts...")
@@ -167,28 +158,14 @@ func main() {
 
 	// Assign subjects to teachers.
 	app.logger.Println("Assigning subjects to teachers...")
-	// Teacher 0 (Juan): MAT101, MAT102
-	app.db.Model(&teachers[0]).Association("Subjects").Append(&subjects[0], &subjects[1])
 	app.db.Model(&subjects[0]).Update("TeacherID", teachers[0].ID)
 	app.db.Model(&subjects[1]).Update("TeacherID", teachers[0].ID)
-
-	// Teacher 1 (Ana): PRG101, PRG102
-	app.db.Model(&teachers[1]).Association("Subjects").Append(&subjects[2], &subjects[3])
 	app.db.Model(&subjects[2]).Update("TeacherID", teachers[1].ID)
 	app.db.Model(&subjects[3]).Update("TeacherID", teachers[1].ID)
-
-	// Teacher 2 (Carlos): BDD101, RED101
-	app.db.Model(&teachers[2]).Association("Subjects").Append(&subjects[4], &subjects[5])
 	app.db.Model(&subjects[4]).Update("TeacherID", teachers[2].ID)
 	app.db.Model(&subjects[5]).Update("TeacherID", teachers[2].ID)
-
-	// Teacher 3 (Patricia): CON101, ADM101
-	app.db.Model(&teachers[3]).Association("Subjects").Append(&subjects[6], &subjects[7])
 	app.db.Model(&subjects[6]).Update("TeacherID", teachers[3].ID)
 	app.db.Model(&subjects[7]).Update("TeacherID", teachers[3].ID)
-
-	// Teacher 4 (Roberto): FIS101, QUI101
-	app.db.Model(&teachers[4]).Association("Subjects").Append(&subjects[8], &subjects[9])
 	app.db.Model(&subjects[8]).Update("TeacherID", teachers[4].ID)
 	app.db.Model(&subjects[9]).Update("TeacherID", teachers[4].ID)
 

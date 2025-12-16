@@ -102,7 +102,7 @@ func createSubjectTestTeacher(t *testing.T, db *gorm.DB, tenantID string, accoun
 }
 
 // createTestSubject creates a test subject for a tenant.
-func createTestSubject(t *testing.T, db *gorm.DB, tenantID, name, code string, teacherID *uint) *edutrack.Subject {
+func createTestSubject(t *testing.T, db *gorm.DB, tenantID, name, code string, teacherID *uint, careerID uint, semester int) *edutrack.Subject {
 	subject := &edutrack.Subject{
 		Name:        name,
 		Code:        code,
@@ -110,6 +110,8 @@ func createTestSubject(t *testing.T, db *gorm.DB, tenantID, name, code string, t
 		Credits:     5,
 		TeacherID:   teacherID,
 		TenantID:    tenantID,
+		CareerID:    careerID,
+		Semester:    semester,
 	}
 
 	if err := db.Create(subject).Error; err != nil {
@@ -137,9 +139,10 @@ func TestHandleListSubjects_Success(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
 
-	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil)
-	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil)
+	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -166,9 +169,10 @@ func TestHandleListSubjects_FilterByName(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
 
-	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil)
-	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil)
+	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -195,9 +199,10 @@ func TestHandleListSubjects_FilterByCode(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
 
-	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil)
-	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil)
+	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -226,9 +231,10 @@ func TestHandleListSubjects_FilterByTeacherID(t *testing.T) {
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	teacherAccount := createSubjectTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
 	teacher := createSubjectTestTeacher(t, db, tenant.ID, teacherAccount.ID)
+	career := createSubjectTestCareer(t, db, tenant.ID)
 
-	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", &teacher.ID)
-	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil)
+	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", &teacher.ID, career.ID, 1)
+	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -248,6 +254,67 @@ func TestHandleListSubjects_FilterByTeacherID(t *testing.T) {
 
 	if len(subjects) != 1 {
 		t.Errorf("handleListSubjects() with teacher_id filter returned %d subjects, want 1", len(subjects))
+	}
+}
+
+func TestHandleListSubjects_FilterByCareerID(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career1 := createSubjectTestCareer(t, db, tenant.ID)
+	career2 := createSubjectTestCareer(t, db, tenant.ID)
+
+	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career1.ID, 1)
+	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil, career2.ID, 1)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeSubjectAuthenticatedRequest(t, http.MethodGet, fmt.Sprintf("/subjects?career_id=%d", career1.ID), nil, account)
+	w := httptest.NewRecorder()
+
+	server.handleListSubjects(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("handleListSubjects() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var subjects []edutrack.Subject
+	if err := json.NewDecoder(w.Body).Decode(&subjects); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(subjects) != 1 {
+		t.Errorf("handleListSubjects() with career_id filter returned %d subjects, want 1", len(subjects))
+	}
+}
+
+func TestHandleListSubjects_FilterBySemester(t *testing.T) {
+	db := setupSubjectTestDB(t)
+	tenant := createSubjectTestTenant(t, db)
+	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+
+	createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
+	createTestSubject(t, db, tenant.ID, "Programación I", "PRO101", nil, career.ID, 2)
+
+	server := NewServer(":8080", db, []byte("test-secret"))
+
+	req := makeSubjectAuthenticatedRequest(t, http.MethodGet, "/subjects?semester=1", nil, account)
+	w := httptest.NewRecorder()
+
+	server.handleListSubjects(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("handleListSubjects() status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var subjects []edutrack.Subject
+	if err := json.NewDecoder(w.Body).Decode(&subjects); err != nil {
+		t.Fatalf("Failed to decode response: %v", err)
+	}
+
+	if len(subjects) != 1 {
+		t.Errorf("handleListSubjects() with semester filter returned %d subjects, want 1", len(subjects))
 	}
 }
 
@@ -273,9 +340,11 @@ func TestHandleListSubjects_TenantIsolation(t *testing.T) {
 	db.Create(tenant2)
 
 	account1 := createSubjectTestAccount(t, db, tenant1.ID, "admin1@test.com", "Admin 1", edutrack.RoleSecretary)
+	career1 := createSubjectTestCareer(t, db, tenant1.ID)
+	career2 := createSubjectTestCareer(t, db, tenant2.ID)
 
-	createTestSubject(t, db, tenant1.ID, "Subject Tenant 1", "ST1-101", nil)
-	createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil)
+	createTestSubject(t, db, tenant1.ID, "Subject Tenant 1", "ST1-101", nil, career1.ID, 1)
+	createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -296,7 +365,8 @@ func TestHandleGetSubject_Success(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
-	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	subject := createTestSubject(t, db, tenant.ID, "Matemáticas I", "MAT101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -364,7 +434,8 @@ func TestHandleGetSubject_ForbiddenCrossTenant(t *testing.T) {
 	db.Create(tenant2)
 
 	account1 := createSubjectTestAccount(t, db, tenant1.ID, "admin1@test.com", "Admin 1", edutrack.RoleSecretary)
-	subject2 := createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil)
+	career2 := createSubjectTestCareer(t, db, tenant2.ID)
+	subject2 := createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -383,6 +454,7 @@ func TestHandleCreateSubject_Success(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
+	career := createSubjectTestCareer(t, db, tenant.ID)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -391,6 +463,8 @@ func TestHandleCreateSubject_Success(t *testing.T) {
 		Code:        "NEW-101",
 		Description: "Descripción de la materia",
 		Credits:     6,
+		CareerID:    career.ID,
+		Semester:    1,
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -415,6 +489,14 @@ func TestHandleCreateSubject_Success(t *testing.T) {
 	if created.TenantID != tenant.ID {
 		t.Errorf("handleCreateSubject() tenant_id = %q, want %q", created.TenantID, tenant.ID)
 	}
+
+	if created.CareerID != career.ID {
+		t.Errorf("handleCreateSubject() career_id = %d, want %d", created.CareerID, career.ID)
+	}
+
+	if created.Semester != 1 {
+		t.Errorf("handleCreateSubject() semester = %d, want %d", created.Semester, 1)
+	}
 }
 
 func TestHandleCreateSubject_WithTeacher(t *testing.T) {
@@ -423,6 +505,7 @@ func TestHandleCreateSubject_WithTeacher(t *testing.T) {
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	teacherAccount := createSubjectTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
 	teacher := createSubjectTestTeacher(t, db, tenant.ID, teacherAccount.ID)
+	career := createSubjectTestCareer(t, db, tenant.ID)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -431,6 +514,8 @@ func TestHandleCreateSubject_WithTeacher(t *testing.T) {
 		Code:      "NEW-101",
 		Credits:   6,
 		TeacherID: &teacher.ID,
+		CareerID:  career.ID,
+		Semester:  1,
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -451,7 +536,7 @@ func TestHandleCreateSubject_WithTeacher(t *testing.T) {
 	}
 }
 
-func TestHandleCreateSubject_WithCareers(t *testing.T) {
+func TestHandleCreateSubject_MissingFields(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
@@ -459,45 +544,15 @@ func TestHandleCreateSubject_WithCareers(t *testing.T) {
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
-	reqBody := CreateSubjectRequest{
-		Name:      "Nueva Materia",
-		Code:      "NEW-101",
-		Credits:   6,
-		CareerIDs: []uint{career.ID},
-	}
-	body, _ := json.Marshal(reqBody)
-
-	req := makeSubjectAuthenticatedRequest(t, http.MethodPost, "/subjects", body, account)
-	w := httptest.NewRecorder()
-
-	server.handleCreateSubject(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Errorf("handleCreateSubject() status = %d, want %d", w.Code, http.StatusCreated)
-	}
-
-	var created edutrack.Subject
-	json.NewDecoder(w.Body).Decode(&created)
-
-	if len(created.Careers) != 1 {
-		t.Errorf("handleCreateSubject() careers count = %d, want 1", len(created.Careers))
-	}
-}
-
-func TestHandleCreateSubject_MissingFields(t *testing.T) {
-	db := setupSubjectTestDB(t)
-	tenant := createSubjectTestTenant(t, db)
-	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
-
-	server := NewServer(":8080", db, []byte("test-secret"))
-
 	tests := []struct {
 		name    string
 		request CreateSubjectRequest
 	}{
-		{"missing name", CreateSubjectRequest{Code: "TEST-101"}},
-		{"missing code", CreateSubjectRequest{Name: "Test Subject"}},
-		{"all empty", CreateSubjectRequest{}},
+		{"missing name", CreateSubjectRequest{Code: "TEST-101", CareerID: career.ID, Semester: 1}},
+		{"missing code", CreateSubjectRequest{Name: "Test Subject", CareerID: career.ID, Semester: 1}},
+		{"missing career_id", CreateSubjectRequest{Name: "Test Subject", Code: "TEST-101", Semester: 1}},
+		{"missing semester", CreateSubjectRequest{Name: "Test Subject", Code: "TEST-101", CareerID: career.ID}},
+		{"zero semester", CreateSubjectRequest{Name: "Test Subject", Code: "TEST-101", CareerID: career.ID, Semester: 0}},
 	}
 
 	for _, tt := range tests {
@@ -536,7 +591,8 @@ func TestHandleUpdateSubject_Success(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
-	subject := createTestSubject(t, db, tenant.ID, "Old Name", "OLD-101", nil)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	subject := createTestSubject(t, db, tenant.ID, "Old Name", "OLD-101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -572,7 +628,9 @@ func TestHandleUpdateSubject_UpdateAllFields(t *testing.T) {
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
 	teacherAccount := createSubjectTestAccount(t, db, tenant.ID, "teacher@test.com", "Teacher", edutrack.RoleTeacher)
 	teacher := createSubjectTestTeacher(t, db, tenant.ID, teacherAccount.ID)
-	subject := createTestSubject(t, db, tenant.ID, "Old Name", "OLD-101", nil)
+	career1 := createSubjectTestCareer(t, db, tenant.ID)
+	career2 := createSubjectTestCareer(t, db, tenant.ID)
+	subject := createTestSubject(t, db, tenant.ID, "Old Name", "OLD-101", nil, career1.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -580,6 +638,7 @@ func TestHandleUpdateSubject_UpdateAllFields(t *testing.T) {
 	newCode := "UPD-101"
 	newDescription := "Updated description"
 	newCredits := 8
+	newSemester := 2
 
 	reqBody := UpdateSubjectRequest{
 		Name:        &newName,
@@ -587,6 +646,8 @@ func TestHandleUpdateSubject_UpdateAllFields(t *testing.T) {
 		Description: &newDescription,
 		Credits:     &newCredits,
 		TeacherID:   &teacher.ID,
+		CareerID:    &career2.ID,
+		Semester:    &newSemester,
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -615,38 +676,11 @@ func TestHandleUpdateSubject_UpdateAllFields(t *testing.T) {
 	if updated.Credits != newCredits {
 		t.Errorf("handleUpdateSubject() credits = %d, want %d", updated.Credits, newCredits)
 	}
-}
-
-func TestHandleUpdateSubject_UpdateCareers(t *testing.T) {
-	db := setupSubjectTestDB(t)
-	tenant := createSubjectTestTenant(t, db)
-	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
-	career := createSubjectTestCareer(t, db, tenant.ID)
-	subject := createTestSubject(t, db, tenant.ID, "Subject", "SUB-101", nil)
-
-	server := NewServer(":8080", db, []byte("test-secret"))
-
-	careerIDs := []uint{career.ID}
-	reqBody := UpdateSubjectRequest{
-		CareerIDs: &careerIDs,
+	if updated.CareerID != career2.ID {
+		t.Errorf("handleUpdateSubject() career_id = %d, want %d", updated.CareerID, career2.ID)
 	}
-	body, _ := json.Marshal(reqBody)
-
-	req := makeSubjectAuthenticatedRequest(t, http.MethodPut, fmt.Sprintf("/subjects/%d", subject.ID), body, account)
-	req.SetPathValue("id", fmt.Sprintf("%d", subject.ID))
-	w := httptest.NewRecorder()
-
-	server.handleUpdateSubject(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("handleUpdateSubject() status = %d, want %d", w.Code, http.StatusOK)
-	}
-
-	var updated edutrack.Subject
-	json.NewDecoder(w.Body).Decode(&updated)
-
-	if len(updated.Careers) != 1 {
-		t.Errorf("handleUpdateSubject() careers count = %d, want 1", len(updated.Careers))
+	if updated.Semester != newSemester {
+		t.Errorf("handleUpdateSubject() semester = %d, want %d", updated.Semester, newSemester)
 	}
 }
 
@@ -680,7 +714,8 @@ func TestHandleUpdateSubject_ForbiddenCrossTenant(t *testing.T) {
 	db.Create(tenant2)
 
 	account1 := createSubjectTestAccount(t, db, tenant1.ID, "admin1@test.com", "Admin 1", edutrack.RoleSecretary)
-	subject2 := createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil)
+	career2 := createSubjectTestCareer(t, db, tenant2.ID)
+	subject2 := createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -703,7 +738,8 @@ func TestHandleDeleteSubject_Success(t *testing.T) {
 	db := setupSubjectTestDB(t)
 	tenant := createSubjectTestTenant(t, db)
 	account := createSubjectTestAccount(t, db, tenant.ID, "admin@test.com", "Admin", edutrack.RoleSecretary)
-	subject := createTestSubject(t, db, tenant.ID, "Subject to Delete", "DEL-101", nil)
+	career := createSubjectTestCareer(t, db, tenant.ID)
+	subject := createTestSubject(t, db, tenant.ID, "Subject to Delete", "DEL-101", nil, career.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -769,7 +805,8 @@ func TestHandleDeleteSubject_ForbiddenCrossTenant(t *testing.T) {
 	db.Create(tenant2)
 
 	account1 := createSubjectTestAccount(t, db, tenant1.ID, "admin1@test.com", "Admin 1", edutrack.RoleSecretary)
-	subject2 := createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil)
+	career2 := createSubjectTestCareer(t, db, tenant2.ID)
+	subject2 := createTestSubject(t, db, tenant2.ID, "Subject Tenant 2", "ST2-101", nil, career2.ID, 1)
 
 	server := NewServer(":8080", db, []byte("test-secret"))
 
@@ -804,6 +841,18 @@ func BenchmarkHandleListSubjects(b *testing.B) {
 	}
 	db.Create(account)
 
+	career := &edutrack.Career{
+		Name:        "Benchmark Career",
+		Code:        fmt.Sprintf("BENCH-%d", time.Now().UnixNano()),
+		Description: "Benchmark career",
+		Duration:    8,
+		Active:      true,
+		TenantID:    tenant.ID,
+	}
+	if err := db.Create(career).Error; err != nil {
+		b.Fatalf("Failed to create test career: %v", err)
+	}
+
 	// Create 50 subjects for benchmark
 	for i := 0; i < 50; i++ {
 		db.Create(&edutrack.Subject{
@@ -812,6 +861,8 @@ func BenchmarkHandleListSubjects(b *testing.B) {
 			Description: "Benchmark subject",
 			Credits:     5,
 			TenantID:    tenant.ID,
+			CareerID:    career.ID,
+			Semester:    1,
 		})
 	}
 

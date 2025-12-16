@@ -30,7 +30,7 @@ type Career struct {
 	// Associations.
 
 	// Subjects that belong to this career.
-	Subjects []Subject `gorm:"many2many:career_subjects;"`
+	Subjects []Subject
 
 	// Students enrolled in this career.
 	Students []Student

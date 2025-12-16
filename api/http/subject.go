@@ -15,7 +15,7 @@ func (s *Server) handleListSubjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	query := s.DB.Where("subjects.tenant_id = ?", account.TenantID)
+	query := s.DB.Where("tenant_id = ?", account.TenantID)
 
 	// Optional filters.
 	if name := r.URL.Query().Get("name"); name != "" {
@@ -28,12 +28,14 @@ func (s *Server) handleListSubjects(w http.ResponseWriter, r *http.Request) {
 		query = query.Where("teacher_id = ?", teacherID)
 	}
 	if careerID := r.URL.Query().Get("career_id"); careerID != "" {
-		query = query.Joins("JOIN career_subjects ON career_subjects.subject_id = subjects.id").
-			Where("career_subjects.career_id = ?", careerID)
+		query = query.Where("career_id = ?", careerID)
+	}
+	if semester := r.URL.Query().Get("semester"); semester != "" {
+		query = query.Where("semester = ?", semester)
 	}
 
 	var subjects []edutrack.Subject
-	if err := query.Preload("Teacher").Preload("Careers").Find(&subjects).Error; err != nil {
+	if err := query.Preload("Teacher").Preload("Career").Find(&subjects).Error; err != nil {
 		sendError(w, http.StatusInternalServerError, ErrInternalServer)
 		return
 	}
@@ -56,7 +58,7 @@ func (s *Server) handleGetSubject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var subject edutrack.Subject
-	if err := s.DB.Preload("Teacher").Preload("Careers").First(&subject, id).Error; err != nil {
+	if err := s.DB.Preload("Teacher").Preload("Career").First(&subject, id).Error; err != nil {
 		sendError(w, http.StatusNotFound, ErrNotFound)
 		return
 	}
@@ -76,7 +78,8 @@ type CreateSubjectRequest struct {
 	Description string `json:"description"`
 	Credits     int    `json:"credits"`
 	TeacherID   *uint  `json:"teacher_id"`
-	CareerIDs   []uint `json:"career_ids"`
+	CareerID    uint   `json:"career_id"`
+	Semester    int    `json:"semester"`
 }
 
 // handleCreateSubject handles POST /subjects.
@@ -93,8 +96,8 @@ func (s *Server) handleCreateSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.Code == "" {
-		sendErrorMessage(w, http.StatusBadRequest, "El nombre y código son requeridos.")
+	if req.Name == "" || req.Code == "" || req.CareerID == 0 || req.Semester <= 0 {
+		sendErrorMessage(w, http.StatusBadRequest, "Nombre, código, ID de carrera y un semestre positivo son requeridos.")
 		return
 	}
 
@@ -104,6 +107,8 @@ func (s *Server) handleCreateSubject(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 		Credits:     req.Credits,
 		TeacherID:   req.TeacherID,
+		CareerID:    req.CareerID,
+		Semester:    req.Semester,
 		TenantID:    account.TenantID,
 	}
 
@@ -112,16 +117,8 @@ func (s *Server) handleCreateSubject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Associate careers if provided.
-	if len(req.CareerIDs) > 0 {
-		var careers []edutrack.Career
-		if err := s.DB.Where("id IN ? AND tenant_id = ?", req.CareerIDs, account.TenantID).Find(&careers).Error; err == nil {
-			s.DB.Model(subject).Association("Careers").Replace(careers)
-		}
-	}
-
 	// Reload with associations.
-	s.DB.Preload("Teacher").Preload("Careers").First(subject, subject.ID)
+	s.DB.Preload("Teacher").Preload("Career").First(subject, subject.ID)
 
 	sendJSON(w, http.StatusCreated, subject)
 }
@@ -133,7 +130,8 @@ type UpdateSubjectRequest struct {
 	Description *string `json:"description"`
 	Credits     *int    `json:"credits"`
 	TeacherID   *uint   `json:"teacher_id"`
-	CareerIDs   *[]uint `json:"career_ids"`
+	CareerID    *uint   `json:"career_id"`
+	Semester    *int    `json:"semester"`
 }
 
 // handleUpdateSubject handles PUT /subjects/{id}.
@@ -182,22 +180,24 @@ func (s *Server) handleUpdateSubject(w http.ResponseWriter, r *http.Request) {
 	if req.TeacherID != nil {
 		subject.TeacherID = req.TeacherID
 	}
+	if req.CareerID != nil {
+		subject.CareerID = *req.CareerID
+	}
+	if req.Semester != nil {
+		if *req.Semester <= 0 {
+			sendErrorMessage(w, http.StatusBadRequest, "El semestre debe ser un número positivo.")
+			return
+		}
+		subject.Semester = *req.Semester
+	}
 
 	if err := s.DB.Save(&subject).Error; err != nil {
 		sendError(w, http.StatusInternalServerError, ErrInternalServer)
 		return
 	}
 
-	// Update career associations if provided.
-	if req.CareerIDs != nil {
-		var careers []edutrack.Career
-		if err := s.DB.Where("id IN ? AND tenant_id = ?", *req.CareerIDs, account.TenantID).Find(&careers).Error; err == nil {
-			s.DB.Model(&subject).Association("Careers").Replace(careers)
-		}
-	}
-
 	// Reload with associations.
-	s.DB.Preload("Teacher").Preload("Careers").First(&subject, subject.ID)
+	s.DB.Preload("Teacher").Preload("Career").First(&subject, subject.ID)
 
 	sendJSON(w, http.StatusOK, subject)
 }
@@ -226,9 +226,6 @@ func (s *Server) handleDeleteSubject(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusForbidden, ErrForbidden)
 		return
 	}
-
-	// Clear career associations before deleting.
-	s.DB.Model(&subject).Association("Careers").Clear()
 
 	if err := s.DB.Delete(&subject).Error; err != nil {
 		sendError(w, http.StatusInternalServerError, ErrInternalServer)
