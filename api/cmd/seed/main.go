@@ -197,7 +197,7 @@ func main() {
 			Name:     sd.name,
 			Email:    sd.email,
 			Password: password,
-			Role:     edutrack.RoleTeacher, // Students use teacher role for now (could add RoleStudent later).
+			Role:     edutrack.RoleStudent,
 			Active:   true,
 			TenantID: tenant.ID,
 		}
