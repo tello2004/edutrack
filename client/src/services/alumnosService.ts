@@ -15,6 +15,7 @@ export interface Alumno {
   nombre: string;
   matricula: string;
   grupo: string;
+  semestre: number;
   email?: string;
   careerId?: number;
   accountId?: number;
@@ -27,6 +28,7 @@ function studentToAlumno(student: Student): Alumno {
     nombre: student.Account?.Name || "",
     matricula: student.StudentID,
     grupo: student.Career?.Name || "",
+    semestre: student.Semester || 1,
     email: student.Account?.Email,
     careerId: student.CareerID,
     accountId: student.AccountID,
@@ -60,7 +62,7 @@ export async function addAlumno(alumno: Omit<Alumno, "id">): Promise<Alumno> {
   const account = await createAccount({
     name: alumno.nombre,
     email: alumno.email || `${alumno.matricula}@estudiante.edutrack.com`,
-    password: alumno.matricula, // Default password is the student ID
+    password: alumno.matricula,
     role: "teacher", // Students use teacher role in the current model
   });
 
@@ -69,6 +71,7 @@ export async function addAlumno(alumno: Omit<Alumno, "id">): Promise<Alumno> {
     student_id: alumno.matricula,
     account_id: account.ID,
     career_id: alumno.careerId,
+    semester: alumno.semestre || 1,
   });
 
   return {
@@ -76,6 +79,7 @@ export async function addAlumno(alumno: Omit<Alumno, "id">): Promise<Alumno> {
     nombre: account.Name,
     matricula: student.StudentID,
     grupo: alumno.grupo,
+    semestre: student.Semester || 1,
     email: account.Email,
     careerId: student.CareerID,
     accountId: student.AccountID,
@@ -89,6 +93,7 @@ export async function updateAlumno(alumno: Alumno): Promise<Alumno> {
   const student = await updateStudent(parseInt(alumno.id, 10), {
     student_id: alumno.matricula,
     career_id: alumno.careerId,
+    semester: alumno.semestre,
   });
 
   return studentToAlumno(student);

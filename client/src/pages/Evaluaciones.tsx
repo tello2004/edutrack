@@ -1,179 +1,320 @@
-import { useEffect, useState } from "react";
-import { getEvaluaciones, type Evaluacion } from "../services/evaluacionesService";
+import React, { useState, useEffect } from 'react';
+import {
+  Container, Grid, Paper, Typography, FormControl, InputLabel, Select,
+  MenuItem, TextField, Button, Table, TableHead, TableBody, TableRow,
+  TableCell, Box, Chip, Tooltip, CircularProgress, Snackbar, Alert
+} from '@mui/material';
+import {
+  Save as SaveIcon,
+  SaveAlt as SaveAllIcon,
+  FilterList as FilterIcon
+} from '@mui/icons-material';
+import {
+  obtenerCarreras,
+  obtenerGruposDisponibles,
+  obtenerMateriasPorCarrera,
+  obtenerAlumnosParaCalificar,
+  guardarCalificacionAlumno,
+  guardarCalificacionesMasivo,
+  type AlumnoParaCalificar
+} from '../services/evaluacionesCompletas';
 
-export default function Evaluaciones() {
-  const [evaluaciones, setEvaluaciones] = useState<Evaluacion[]>([]);
-  const [loading, setLoading] = useState(true);
+interface Grupo {
+  id: string;
+  nombre: string;
+}
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingEval, setEditingEval] = useState<Evaluacion | null>(null);
-  const [formData, setFormData] = useState({
-    nombre: "",
-    descripcion: "",
-    fecha: "",
-    peso: 0,
-  });
+const Evaluaciones = () => {
+  const [carreras, setCarreras] = useState<any[]>([]);
+  const [carreraSeleccionada, setCarreraSeleccionada] = useState<number | ''>('');
+  const [grupos, setGrupos] = useState<Grupo[]>([]);
+  const [grupoSeleccionado, setGrupoSeleccionado] = useState<string | ''>('');
+  const [materias, setMaterias] = useState<any[]>([]);
+  const [materiaSeleccionada, setMateriaSeleccionada] = useState<number | ''>('');
+  const [alumnos, setAlumnos] = useState<AlumnoParaCalificar[]>([]);
+  const [calificaciones, setCalificaciones] = useState<Record<number, string>>({});
+  const [loading, setLoading] = useState(false);
+  const [loadingFiltros, setLoadingFiltros] = useState(false);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
 
   useEffect(() => {
-    async function fetchEvaluaciones() {
-      try {
-        const data = await getEvaluaciones();
-        setEvaluaciones(data);
-      } catch (error) {
-        console.error("Error al cargar evaluaciones:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchEvaluaciones();
+    cargarCarreras();
   }, []);
 
-  const handleAgregar = () => {
-    setFormData({ nombre: "", descripcion: "", fecha: "", peso: 0 });
-    setEditingEval(null);
-    setModalOpen(true);
-  };
+  const cargarCarreras = async () => {
+    try {
+      setLoadingFiltros(true);
+      const carrerasData = await obtenerCarreras();
+      setCarreras(carrerasData);
 
-  const handleEditar = (evalItem: Evaluacion) => {
-    setFormData({
-      nombre: evalItem.nombre,
-      descripcion: evalItem.descripcion || "",
-      fecha: evalItem.fecha,
-      peso: evalItem.peso,
-    });
-    setEditingEval(evalItem);
-    setModalOpen(true);
-  };
-
-  const handleEliminar = (id: string) => {
-    if (confirm("¿Deseas eliminar esta evaluación?")) {
-      setEvaluaciones(evaluaciones.filter(e => e.id !== id));
+      const gruposData = obtenerGruposDisponibles().map((g) => ({ id: g, nombre: g }));
+      setGrupos(gruposData);
+    } catch (error) {
+      console.error('Error cargando carreras:', error);
+      mostrarError('Error al cargar las carreras');
+    } finally {
+      setLoadingFiltros(false);
     }
   };
 
-  const handleGuardar = () => {
-    if (editingEval) {
-      setEvaluaciones(
-        evaluaciones.map(e => (e.id === editingEval.id ? { ...e, ...formData } : e))
-      );
+  useEffect(() => {
+    if (carreraSeleccionada) {
+      cargarMaterias(carreraSeleccionada);
     } else {
-      const newEval: Evaluacion = { id: Date.now().toString(), ...formData };
-      setEvaluaciones([...evaluaciones, newEval]);
+      setMaterias([]);
+      setMateriaSeleccionada('');
     }
-    setModalOpen(false);
+  }, [carreraSeleccionada]);
+
+  const cargarMaterias = async (careerId: number) => {
+    try {
+      setLoadingFiltros(true);
+      const materiasData = await obtenerMateriasPorCarrera(careerId);
+      setMaterias(materiasData);
+    } catch (error) {
+      console.error('Error cargando materias:', error);
+      mostrarError('Error al cargar las materias');
+    } finally {
+      setLoadingFiltros(false);
+    }
+  };
+
+  useEffect(() => {
+    if (carreraSeleccionada && grupoSeleccionado && materiaSeleccionada) {
+      cargarAlumnos();
+    } else {
+      setAlumnos([]);
+      setCalificaciones({});
+    }
+  }, [carreraSeleccionada, grupoSeleccionado, materiaSeleccionada]);
+
+  const cargarAlumnos = async () => {
+    try {
+      setLoading(true);
+      const alumnosData = await obtenerAlumnosParaCalificar(
+        carreraSeleccionada as number,
+        materiaSeleccionada as number
+      );
+      setAlumnos(alumnosData);
+
+      const initialGrades: Record<number, string> = {};
+      alumnosData.forEach(a => {
+        initialGrades[a.id] = a.currentGrade?.toString() || '';
+      });
+      setCalificaciones(initialGrades);
+    } catch (error) {
+      console.error('Error cargando alumnos:', error);
+      mostrarError('Error al cargar los alumnos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCalificacionChange = (studentId: number, value: string) => {
+    const numValue = parseFloat(value);
+    if (value && (isNaN(numValue) || numValue < 0 || numValue > 10)) {
+      mostrarError('La calificación debe ser entre 0 y 10');
+      return;
+    }
+    setCalificaciones(prev => ({ ...prev, [studentId]: value }));
+  };
+
+  const guardarCalificacionIndividual = async (alumno: AlumnoParaCalificar) => {
+    const calificacion = calificaciones[alumno.id];
+    if (!calificacion || calificacion.trim() === '') {
+      mostrarError('Ingresa una calificación primero');
+      return;
+    }
+    const gradeValue = parseFloat(calificacion);
+    if (isNaN(gradeValue) || gradeValue < 0 || gradeValue > 10) {
+      mostrarError('La calificación debe ser entre 0 y 10');
+      return;
+    }
+
+    try {
+      const success = await guardarCalificacionAlumno(
+        alumno.id,
+        materiaSeleccionada as number,
+        gradeValue,
+        `Calificación asignada - ${new Date().toLocaleDateString()}`
+      );
+      if (success) {
+        mostrarMensaje(`Calificación guardada para ${alumno.account.name}`);
+        setAlumnos(prev => prev.map(a => a.id === alumno.id ? { ...a, currentGrade: gradeValue } : a));
+      } else {
+        mostrarError('Error al guardar la calificación');
+      }
+    } catch (error) {
+      console.error(error);
+      mostrarError('Error al guardar la calificación');
+    }
+  };
+
+  const guardarTodasCalificaciones = async () => {
+    const calificacionesParaGuardar = alumnos.map(a => ({
+      studentId: a.id,
+      subjectId: materiaSeleccionada as number,
+      grade: parseFloat(calificaciones[a.id]),
+      notes: `Calificación masiva - ${new Date().toLocaleDateString()}`
+    })).filter(c => !isNaN(c.grade) && c.grade >= 0 && c.grade <= 10);
+
+    if (calificacionesParaGuardar.length === 0) {
+      mostrarError('No hay calificaciones válidas para guardar');
+      return;
+    }
+
+    try {
+      const success = await guardarCalificacionesMasivo(calificacionesParaGuardar);
+      if (success) {
+        mostrarMensaje(`${calificacionesParaGuardar.length} calificaciones guardadas`);
+        setAlumnos(prev => prev.map(a => {
+          const cal = calificacionesParaGuardar.find(c => c.studentId === a.id);
+          return cal ? { ...a, currentGrade: cal.grade } : a;
+        }));
+      } else {
+        mostrarError('Error al guardar algunas calificaciones');
+      }
+    } catch (error) {
+      console.error(error);
+      mostrarError('Error al guardar calificaciones');
+    }
+  };
+
+  const getEstadoTexto = (cal: string) => {
+    const grade = parseFloat(cal);
+    if (isNaN(grade)) return 'Sin calificar';
+    if (grade >= 9) return 'Excelente';
+    if (grade >= 7) return 'Bueno';
+    if (grade >= 6) return 'Suficiente';
+    return 'Reprobado';
+  };
+
+  const getEstadoColor = (cal: string) => {
+    const grade = parseFloat(cal);
+    if (isNaN(grade)) return 'default';
+    if (grade >= 9) return 'success';
+    if (grade >= 7) return 'info';
+    if (grade >= 6) return 'warning';
+    return 'error';
+  };
+
+  const mostrarMensaje = (msg: string) => setSnackbar({ open: true, message: msg, severity: 'success' });
+  const mostrarError = (msg: string) => setSnackbar({ open: true, message: msg, severity: 'error' });
+  const handleCloseSnackbar = () => setSnackbar(prev => ({ ...prev, open: false }));
+
+  const calcularPromedio = (alumno: AlumnoParaCalificar) => {
+    const grade = parseFloat(calificaciones[alumno.id]);
+    return isNaN(grade) ? 0 : grade;
   };
 
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Gestión de Evaluaciones</h1>
-        <button
-          onClick={handleAgregar}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
-        >
-          + Agregar Evaluación
-        </button>
-      </div>
+    <Container maxWidth="xl">
+      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>Evaluaciones - Secretaría</Typography>
 
-      {loading ? (
-        <p>Cargando evaluaciones...</p>
-      ) : evaluaciones.length === 0 ? (
-        <p>No hay evaluaciones registradas.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white shadow-md rounded-lg overflow-hidden">
-            <thead className="bg-blue-500 text-white">
-              <tr>
-                <th className="py-3 px-4 text-left">Nombre</th>
-                <th className="py-3 px-4 text-left">Descripción</th>
-                <th className="py-3 px-4 text-left">Fecha</th>
-                <th className="py-3 px-4 text-left">Porcentaje (%)</th>
-                <th className="py-3 px-4 text-left">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {evaluaciones.map(e => (
-                <tr key={e.id} className="border-b hover:bg-gray-100">
-                  <td className="py-2 px-4">{e.nombre}</td>
-                  <td className="py-2 px-4">{e.descripcion || "—"}</td>
-                  <td className="py-2 px-4">{e.fecha}</td>
-                  <td className="py-2 px-4">{e.peso}</td>
-                  <td className="py-2 px-4 space-x-2">
-                    <button
-                      onClick={() => handleEditar(e)}
-                      className="text-blue-500 hover:underline"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => handleEliminar(e.id)}
-                      className="text-red-500 hover:underline"
-                    >
-                      Eliminar
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <Paper sx={{ p: 3, mb: 3 }}>
+        <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <FilterIcon /> Filtros
+        </Typography>
+
+        {loadingFiltros && <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}><CircularProgress /></Box>}
+
+        <Grid container spacing={3}>
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth disabled={loadingFiltros}>
+              <InputLabel>Carrera</InputLabel>
+              <Select value={carreraSeleccionada} onChange={e => setCarreraSeleccionada(e.target.value as number)} label="Carrera">
+                <MenuItem value="">Seleccionar carrera</MenuItem>
+                {carreras.map(c => <MenuItem key={c.ID} value={c.ID}>{c.Name}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth disabled={!carreraSeleccionada || loadingFiltros}>
+              <InputLabel>Grupo</InputLabel>
+              <Select value={grupoSeleccionado} onChange={e => setGrupoSeleccionado(e.target.value as string)} label="Grupo">
+                <MenuItem value="">Seleccionar grupo</MenuItem>
+                {grupos.map(g => <MenuItem key={g.id} value={g.id}>{g.nombre}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <FormControl fullWidth disabled={!grupoSeleccionado || loadingFiltros}>
+              <InputLabel>Materia</InputLabel>
+              <Select value={materiaSeleccionada} onChange={e => setMateriaSeleccionada(e.target.value as number)} label="Materia">
+                <MenuItem value="">Seleccionar materia</MenuItem>
+                {materias.map(m => <MenuItem key={m.ID} value={m.ID}>{m.Name}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </Grid>
+
+          <Grid item xs={12} md={3}>
+            <Button fullWidth variant="contained" startIcon={<SaveAllIcon />} onClick={guardarTodasCalificaciones} disabled={!materiaSeleccionada || alumnos.length === 0 || loading}>
+              Guardar Todas
+            </Button>
+          </Grid>
+        </Grid>
+      </Paper>
+
+      {alumnos.length > 0 && (
+        <Paper sx={{ p: 3 }}>
+          <Typography variant="h6" gutterBottom>Alumnos para Calificar ({alumnos.length})</Typography>
+          {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress /></Box> :
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Matrícula</TableCell>
+                  <TableCell>Nombre</TableCell>
+                  <TableCell>Semestre</TableCell>
+                  <TableCell>Calificación (0-10)</TableCell>
+                  <TableCell>Estado</TableCell>
+                  <TableCell>Promedio</TableCell>
+                  <TableCell>Acciones</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {alumnos.map(a => (
+                  <TableRow key={a.id}>
+                    <TableCell>{a.student_id}</TableCell>
+                    <TableCell>{a.account.name}</TableCell>
+                    <TableCell><Chip label={`${a.semester}°`} size="small" color="primary" variant="outlined" /></TableCell>
+                    <TableCell>
+                      <TextField type="number" value={calificaciones[a.id] || ''} onChange={e => handleCalificacionChange(a.id, e.target.value)}
+                        inputProps={{ min: 0, max: 10, step: 0.1, style: { textAlign: 'center' } }}
+                        size="small" sx={{ width: 100 }} />
+                    </TableCell>
+                    <TableCell>
+                      <Chip label={getEstadoTexto(calificaciones[a.id])} color={getEstadoColor(calificaciones[a.id])} size="small" />
+                    </TableCell>
+                    <TableCell>{calcularPromedio(a).toFixed(1)}</TableCell>
+                    <TableCell>
+                      <Tooltip title="Guardar calificación">
+                        <Button variant="outlined" size="small" startIcon={<SaveIcon />} onClick={() => guardarCalificacionIndividual(a)} disabled={!calificaciones[a.id]}>
+                          Guardar
+                        </Button>
+                      </Tooltip>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>}
+        </Paper>
       )}
 
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">
-              {editingEval ? "Editar Evaluación" : "Agregar Evaluación"}
-            </h2>
-
-            <div className="flex flex-col gap-3">
-              <input
-                type="text"
-                placeholder="Nombre"
-                value={formData.nombre}
-                onChange={e => setFormData({ ...formData, nombre: e.target.value })}
-                className="border p-2 rounded"
-              />
-              <input
-                type="text"
-                placeholder="Descripción"
-                value={formData.descripcion}
-                onChange={e => setFormData({ ...formData, descripcion: e.target.value })}
-                className="border p-2 rounded"
-              />
-              <input
-                type="date"
-                placeholder="Fecha"
-                value={formData.fecha}
-                onChange={e => setFormData({ ...formData, fecha: e.target.value })}
-                className="border p-2 rounded"
-              />
-              <input
-                type="number"
-                placeholder="Peso (%)"
-                value={formData.peso}
-                onChange={e => setFormData({ ...formData, peso: Number(e.target.value) })}
-                className="border p-2 rounded"
-              />
-            </div>
-
-            <div className="flex justify-end mt-4 gap-2">
-              <button
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 rounded border"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleGuardar}
-                className="px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600"
-              >
-                Guardar
-              </button>
-            </div>
-          </div>
-        </div>
+      {!loading && alumnos.length === 0 && carreraSeleccionada && grupoSeleccionado && materiaSeleccionada && (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
+          <Typography>No hay alumnos inscritos en esta materia con los filtros seleccionados</Typography>
+        </Paper>
       )}
-    </div>
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={handleCloseSnackbar} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Container>
   );
-}
+};
+
+export default Evaluaciones;

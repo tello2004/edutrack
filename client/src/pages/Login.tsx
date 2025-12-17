@@ -21,7 +21,11 @@ export default function Login() {
         setLoading(true);
 
         try {
-            await login(email, password);
+            const response = await login(email, password);
+
+            console.log(response);
+            console.log(response.user);
+            console.log(response.user.role);
             navigate("/");
         } catch (err) {
             if (err instanceof Error) {

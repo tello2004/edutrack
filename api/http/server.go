@@ -156,10 +156,19 @@ func (s *Server) registerRoutes() {
 	s.router.HandleFunc("PUT /attendances/{id}", protected(s.handleUpdateAttendance))
 	s.router.HandleFunc("DELETE /attendances/{id}", protected(s.handleDeleteAttendance))
 
+	// test
+	mux.Handle("POST /groups/{id}/subjects", s.auth(s.handleAssignSubjectsToGroup))
+	mux.Handle("GET /groups/{id}/subjects", s.auth(s.handleListGroupSubjects))
+	mux.Handle("POST /groups/{groupId}/subjects/{subjectId}/grades", s.auth(s.handleCreateGrades))
+	mux.Handle("GET /reports/student-averages", s.auth(s.handleStudentAverages))
+
 	// Grades
+	s.router.HandleFunc("POST /grades", protected(s.handleCreateOrUpdateGrade))
+	s.router.HandleFunc("GET /grades/average", protected(s.handleStudentAverage))
+
 	s.router.HandleFunc("GET /grades", protected(s.handleListGrades))
 	s.router.HandleFunc("GET /grades/{id}", protected(s.handleGetGrade))
-	s.router.HandleFunc("POST /grades", protected(s.handleCreateGrade))
+	//s.router.HandleFunc("POST /grades", protected(s.handleCreateGrade))
 	s.router.HandleFunc("PUT /grades/{id}", protected(s.handleUpdateGrade))
 	s.router.HandleFunc("DELETE /grades/{id}", protected(s.handleDeleteGrade))
 }

@@ -5,24 +5,38 @@ import "gorm.io/gorm"
 // Grade represents a student's grade for a specific topic within a subject.
 type Grade struct {
 	gorm.Model
+	Value     float64
+	Period    int
 
-	// The numeric grade value (e.g., 0-100 or 0-10).
-	Value float64
-
-	// Optional description or notes about the grade.
-	Notes string
-
-	// Foreign keys.
-
-	// The student who received this grade.
 	StudentID uint
 	Student   Student
 
-	// The topic this grade is for.
-	TopicID uint
-	Topic   Topic
+	// The subject this grade is for.
+	SubjectID uint
+	Subject   Subject
 
-	// TenantID for multi-tenant support.
+	// The teacher who assigned this grade.
+	TeacherID uint
+	Teacher   Teacher
+
 	TenantID string
-	Tenant   Tenant
 }
+
+/*
+type Grade struct {
+	gorm.Model
+	Value     float64
+	Period    int
+
+	StudentID uint
+	Student   Student
+
+	SubjectID uint
+	Subject   Subject
+
+	GroupID uint
+	Group   Group
+
+	TenantID string
+}
+*/

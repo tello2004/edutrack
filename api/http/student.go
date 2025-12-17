@@ -102,7 +102,7 @@ func (s *Server) handleGetStudent(w http.ResponseWriter, r *http.Request) {
 	sendJSON(w, http.StatusOK, student)
 }
 
-// CreateStudentRequest represents the request body for creating a student.
+/* CreateStudentRequest represents the request body for creating a student.
 type CreateStudentRequest struct {
 	StudentID string `json:"student_id"`
 	Name      string `json:"name"`
@@ -173,6 +173,54 @@ func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
 		sendError(w, http.StatusInternalServerError, ErrInternalServer)
 		return
 	}
+
+	sendJSON(w, http.StatusCreated, student)
+}*/
+
+type CreateStudentRequest struct {
+	StudentID string `json:"student_id"`
+	AccountID uint   `json:"account_id"`
+	CareerID  uint   `json:"career_id"`
+	GroupID   uint   `json:"group_id"`
+	Semester  int    `json:"semester"`
+}
+
+func (s *Server) handleCreateStudent(w http.ResponseWriter, r *http.Request) {
+	account := edutrack.AccountFromContext(r.Context())
+	if account == nil {
+		sendError(w, http.StatusUnauthorized, ErrUnauthorized)
+		return
+	}
+
+	var req CreateStudentRequest
+	if err := decodeJSON(r, &req); err != nil {
+		sendError(w, http.StatusBadRequest, ErrBadRequest)
+		return
+	}
+
+	if req.StudentID == "" || req.AccountID == 0 || req.CareerID == 0 || req.GroupID == 0 || req.Semester <= 0 {
+		sendErrorMessage(w, http.StatusBadRequest, "Datos incompletos del alumno.")
+		return
+	}
+
+	student := edutrack.Student{
+		StudentID: req.StudentID,
+		AccountID: req.AccountID,
+		CareerID:  req.CareerID,
+		GroupID:   req.GroupID,
+		Semester:  req.Semester,
+		TenantID:  account.TenantID,
+	}
+
+	if err := s.DB.Create(&student).Error; err != nil {
+		sendError(w, http.StatusInternalServerError, ErrInternalServer)
+		return
+	}
+
+	s.DB.Preload("Account").
+		Preload("Career").
+		Preload("Group").
+		First(&student, student.ID)
 
 	sendJSON(w, http.StatusCreated, student)
 }
