@@ -1,3 +1,4 @@
+import { apiClient } from "../api/client";
 import {
   getStudents,
   getStudent,
@@ -33,6 +34,11 @@ function studentToAlumno(student: Student): Alumno {
     careerId: student.CareerID,
     accountId: student.AccountID,
   };
+}
+
+export async function getStudentsByGroup(groupId: string): Promise<Alumno[]> {
+  const response = await apiClient.get<Alumno[]>(`/groups/${groupId}/students`);
+  return response.data;
 }
 
 /**

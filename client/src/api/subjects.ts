@@ -11,7 +11,7 @@ const BASE_PATH = '/subjects';
  * Get all subjects
  */
 export async function getSubjects(): Promise<Subject[]> {
-  const response = await apiClient.get<Subject[]>(BASE_PATH);
+  const response = await apiClient.get<Subject[]>('/subjects');
   return response.data;
 }
 

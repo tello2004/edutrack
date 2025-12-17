@@ -157,10 +157,11 @@ func (s *Server) registerRoutes() {
 	s.router.HandleFunc("DELETE /attendances/{id}", protected(s.handleDeleteAttendance))
 
 	// test
-	mux.Handle("POST /groups/{id}/subjects", s.auth(s.handleAssignSubjectsToGroup))
+	/*mux.Handle("POST /groups/{id}/subjects", s.auth(s.handleAssignSubjectsToGroup))
 	mux.Handle("GET /groups/{id}/subjects", s.auth(s.handleListGroupSubjects))
 	mux.Handle("POST /groups/{groupId}/subjects/{subjectId}/grades", s.auth(s.handleCreateGrades))
-	mux.Handle("GET /reports/student-averages", s.auth(s.handleStudentAverages))
+	mux.Handle("GET /reports/student-averages", s.auth(s.handleStudentAverages))*/ // ESTOS NO EXISTEN SON EXPERIMENTALES (IGNORAR)
+	s.router.HandleFunc("/groups/{id}/students", s.withAuth(s.handleListGroupStudents))
 
 	// Grades
 	s.router.HandleFunc("POST /grades", protected(s.handleCreateOrUpdateGrade))

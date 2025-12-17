@@ -22,7 +22,9 @@ function subjectToMateria(subject: Subject): Materia {
 export async function getMaterias(): Promise<Materia[]> {
   try {
     const subjects = await getSubjects();
-    return subjects.map(subjectToMateria);
+    const materias = subjects.map(subjectToMateria);
+    console.log("Todas las materias:", materias);
+    return materias;
   } catch (error) {
     console.error("Error al cargar materias:", error);
     return [];
@@ -40,11 +42,6 @@ export async function getMateria(id: number): Promise<Materia | null> {
 }
 
 export async function getMateriasByCareer(careerId: number): Promise<Materia[]> {
-  try {
-    const materias = await getMaterias();
-    return materias.filter(m => m.careerIds.includes(careerId));
-  } catch (error) {
-    console.error("Error al cargar materias por carrera:", error);
-    return [];
-  }
+  const materias = await getMaterias();
+  return materias;
 }

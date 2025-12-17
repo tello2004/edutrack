@@ -235,6 +235,45 @@ func (s *Server) handleDeleteSubject(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET /groups/{id}/students
+func (s *Server) handleListGroupStudents(w http.ResponseWriter, r *http.Request) {
+    // Obtenemos el ID del grupo de la URL
+    groupIDStr := r.URL.Path[len("/groups/") : len(r.URL.Path)-len("/students")]
+    groupID, err := strconv.ParseUint(groupIDStr, 10, 64)
+    if err != nil {
+        sendError(w, http.StatusBadRequest, "Invalid group ID")
+        return
+    }
+
+    // Convertimos groupID a CareerID (simulación de grupo)
+    var students []edutrack.Student
+    if err := s.DB.Preload("Account").Preload("Career").
+        Where("career_id = ?", groupID).
+        Find(&students).Error; err != nil {
+        sendError(w, http.StatusInternalServerError, "Failed to get students")
+        return
+    }
+
+    sendJSON(w, http.StatusOK, students)
+}
+
+/* GET /groups/{id}/students
+func (s *Server) handleListGroupStudents(w http.ResponseWriter, r *http.Request) {
+    groupID, err := strconv.ParseUint(r.PathValue("id"), 10, 64)
+    if err != nil {
+        sendError(w, http.StatusBadRequest, "Invalid group ID")
+        return
+    }
+
+    var students []edutrack.Student
+    if err := s.DB.Where("group_id = ?", groupID).Find(&students).Error; err != nil {
+        sendError(w, http.StatusInternalServerError, "Failed to get students")
+        return
+    }
+
+    sendJSON(w, http.StatusOK, students)
+}*/
+
 // handleListSubjectStudents handles GET /subjects/{id}/students.
 // It lists all students enrolled in a specific subject.
 // Access is granted to secretaries and the teacher of the subject.

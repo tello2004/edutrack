@@ -48,23 +48,25 @@ export default function Asistencias() {
     fetchDatosIniciales();
   }, []);
 
-  useEffect(() => {
-    async function fetchMaterias() {
-      if (!grupoSeleccionado) {
-        setMaterias([]);
-        setMateriaSeleccionada("");
-        return;
-      }
-      try {
-        const materiasData = await getMateriasByCareer(parseInt(grupoSeleccionado));
-        setMaterias(materiasData);
-      } catch (error) {
-        console.error("Error al cargar materias:", error);
-        setMaterias([]);
-      }
+ useEffect(() => {
+  async function fetchMaterias() {
+    const careerId = parseInt(grupoSeleccionado, 10);
+    if (isNaN(careerId)) {
+      setMaterias([]);
+      setMateriaSeleccionada("");
+      return;
     }
-    fetchMaterias();
-  }, [grupoSeleccionado]);
+    try {
+      const materiasData = await getMateriasByCareer(careerId);
+      console.log("Materias cargadas:", materiasData);
+      setMaterias(materiasData);
+    } catch (error) {
+      console.error("Error al cargar materias:", error);
+      setMaterias([]);
+    }
+  }
+  if (grupoSeleccionado) fetchMaterias();
+}, [grupoSeleccionado]);
 
   const enriquecerAsistenciasConAlumnos = (asistenciasData: Asistencia[]) => {
     return asistenciasData.map(asistencia => {
@@ -317,7 +319,7 @@ export default function Asistencias() {
             >
               <option value="">Seleccionar grupo</option>
               {grupos.map(grupo => (
-                <option key={grupo.id} value={grupo.id}>
+                <option key={grupo.id} value={grupo.id.toString()}>
                   {grupo.nombre}
                 </option>
               ))}
